@@ -73,7 +73,7 @@ defmodule Ngauge.Job do
 
       true ->
         Task.shutdown(job.task, :brutal_kill)
-        # TODO: maybe catch retun value of shutdown and use it?
+        # TODO: maybe catch return value of shutdown and use it?
         %{job | status: :timeout, stopped: timestamp()}
     end
   end
@@ -91,7 +91,7 @@ defmodule Ngauge.Job do
   """
   @spec age(t()) :: pos_integer()
   def age(job) when is_job(job) do
-    # current age is still running, period lived otherwhise
+    # current age is still running, period lived otherwise
     case job.status do
       :run -> timestamp() - job.started
       _ -> job.stopped - job.started

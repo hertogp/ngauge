@@ -1,6 +1,6 @@
 defmodule Ngauge.Worker.Chain do
   @moduledoc """
-  Retrieves a certificate chain from host (by name of IP)
+  Retrieves a certificate chain from host (by name or IP)
 
   Fake for now
   """
