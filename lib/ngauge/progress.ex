@@ -178,6 +178,7 @@ defmodule Ngauge.Progress do
       name,
       @reset,
       " ",
+      @bright,
       @yellow,
       repeat(@bar_on, fail),
       @green,

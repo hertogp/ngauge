@@ -8,10 +8,12 @@ defmodule Ngauge.Worker.Chain do
 
   @spec run(binary) :: [binary]
   def run(arg) do
+    # special arguments with special (re)actions
+    # donot forget to have the catch all clause at the end
     case arg do
       "1.1.1.0" -> raise "boom"
       "1.1.1.1" -> Process.sleep(10_000)
-      "1.1.1.2" -> Queue.enq(__MODULE__, ["badaboom!", "2.2.2.0/27"])
+      "1.1.1.2" -> Queue.enq(__MODULE__, ["badaboom!", "2.2.2.0/30"])
       "1.1.1.3" -> matherr(0)
       "1.1.1.4" -> Queue.enq(Ngauge.Worker.Ping, [arg])
       _ -> nil

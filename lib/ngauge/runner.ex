@@ -2,8 +2,7 @@ defmodule Ngauge.Runner do
   alias Ngauge.{Job, Options, Queue, Progress}
 
   @doc """
-
-  Asynchronously process a list of arguments using max N processes per worker.
+  Asynchronously process arguments using max N processes per worker type.
 
   Usage:
     Runner.run([arg])
@@ -31,14 +30,7 @@ defmodule Ngauge.Runner do
     do_run(jobs, interval, max)
   end
 
-  defp to_jobs(worker, args),
-    do: to_jobs(worker, args, [])
-
-  defp to_jobs(_worker, [], acc),
-    do: acc
-
-  defp to_jobs(worker, [arg | tail], acc),
-    do: to_jobs(worker, tail, [Job.new(worker, :run, arg) | acc])
+  # Helpers
 
   # not using do_run([],_,_) to appease Dialyzer, but why?
   @spec do_run([Job.t()], non_neg_integer, map) :: :ok
@@ -68,4 +60,13 @@ defmodule Ngauge.Runner do
     Process.sleep(interval)
     do_run(jobs, interval, max)
   end
+
+  defp to_jobs(worker, args),
+    do: to_jobs(worker, args, [])
+
+  defp to_jobs(_worker, [], acc),
+    do: acc
+
+  defp to_jobs(worker, [arg | tail], acc),
+    do: to_jobs(worker, tail, [Job.new(worker, :run, arg) | acc])
 end
