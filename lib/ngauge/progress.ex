@@ -21,6 +21,9 @@ defmodule Ngauge.Progress do
     :timeout => IO.ANSI.bright() <> IO.ANSI.yellow(),
     :run => IO.ANSI.normal()
   }
+  @bar_failed @reset <> @yellow
+  @bar_succes @reset <> @green
+  @bar_todos @reset <> IO.ANSI.light_black()
   # see https://en.wikipedia.org/wiki/List_of_Unicode_characters#Box_Drawing
   # or https://jrgraphix.net/r/Unicode/2500-257F
   @bar_on "\u25AE"
@@ -55,9 +58,14 @@ defmodule Ngauge.Progress do
     Agent.start_link(fn -> @state end, name: __MODULE__)
   end
 
-  def clear() do
-    Agent.update(__MODULE__, fn _ -> @state end)
-  end
+  def clear(),
+    do: Agent.update(__MODULE__, fn _ -> @state end)
+
+  def clear_screen(),
+    do: IO.ANSI.clear() |> IO.write()
+
+  def state(),
+    do: Agent.get(__MODULE__, & &1)
 
   @doc """
   Given a list of jobs that are running or are done, update the worker statistics.
@@ -86,6 +94,7 @@ defmodule Ngauge.Progress do
 
     max = elem(:io.rows(), 1) - 8
 
+    # TODO: donot keep actual jobs in state, just their string version
     done =
       Enum.filter(jobs, fn job -> job.status != :run end)
       |> Kernel.++(state.jobs)
@@ -178,12 +187,11 @@ defmodule Ngauge.Progress do
       name,
       @reset,
       " ",
-      @bright,
-      @yellow,
+      @bar_failed,
       repeat(@bar_on, fail),
-      @green,
+      @bar_succes,
       repeat(@bar_on, ok),
-      @green,
+      @bar_todos,
       repeat(@bar_off, off),
       @reset,
       perc,
@@ -244,6 +252,4 @@ defmodule Ngauge.Progress do
   end
 
   @spec clear_screen() :: :ok
-  def clear_screen(),
-    do: IO.ANSI.clear() |> IO.write()
 end

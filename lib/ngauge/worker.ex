@@ -34,7 +34,7 @@ defmodule Ngauge.Worker do
 
   @spec all_available() :: [atom]
   def all_available() do
-    {:ok, modules} = :application.get_key(:netx, :modules)
+    {:ok, modules} = :application.get_key(:ngauge, :modules)
     Enum.filter(modules, &worker?/1)
   end
 end

@@ -12,7 +12,7 @@ defmodule Ngauge.Runner do
     # the initial set of workers to run, specified on the cli
     # note: workers may enqueue arguments for other workers, so
     # do_run/3 needs to check all active queues.
-    workers = Options.get(:workers)
+    workers = (Options.get(:workers) ++ Queue.active()) |> Enum.uniq()
     max = Options.get(:max)
 
     Enum.map(workers, &Queue.enq(&1, args, clear: true))
