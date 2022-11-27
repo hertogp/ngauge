@@ -13,6 +13,9 @@ defmodule Ngauge.Queue do
   alias Ngauge.{Job, Worker}
   alias Pfx
 
+  # args is the list of arguments to be mined given a certain demand
+  # dq/eq is the number of enqueued/dequeued arguments
+  # q is overflow queue 
   @state %{
     args: [],
     dq: 0,
@@ -21,23 +24,30 @@ defmodule Ngauge.Queue do
   }
 
   def new(module) do
-    if Worker.worker?(module),
-      do: start_link(module),
-      else: {:error, {:noworker, module}}
+    # TODO: register new worker queues so enq/2,3 can check if a queue
+    # is already up or needs to be started.  Reason is that workers may
+    # find new targets they would like to enqueue, either for themselves
+    # of another worker they know of.
+    DynamicSupervisor.start_child(Ngauge.QueueSupervisor, {Ngauge.Queue, module})
   end
 
   @spec start_link(any) :: {:error, any} | {:ok, pid}
   def start_link(name) do
-    # eq = total enqueued, dq = total dequeued
-    # args = still to be mined for jobs
-    # q = list of jobs that can be handed out
-    state = %{q: [], args: [], eq: 0, dq: 0}
-    Agent.start_link(fn -> state end, name: name)
+    if Worker.worker?(name),
+      do: Agent.start_link(fn -> @state end, name: name),
+      else: {:error, {:noworker, name}}
   end
 
   @spec enq(atom, [binary], Keyword.t()) :: :ok
-  def enq(name, args, opts \\ []),
-    do: Agent.update(name, fn state -> do_enq(state, args, opts) end)
+  def enq(name, args, opts \\ []) do
+    unless Process.whereis(name) do
+      # {Ngauge.Queue, name}
+      child_spec = %{id: name, start: {Ngauge.Queue, :start_link, [name]}}
+      {:ok, _pid} = DynamicSupervisor.start_child(Ngauge.QueueSupervisor, child_spec)
+    end
+
+    Agent.update(name, fn state -> do_enq(state, args, opts) end)
+  end
 
   defp do_enq(state, args, opts) do
     # update and return the new state
@@ -72,6 +82,23 @@ defmodule Ngauge.Queue do
   end
 
   @spec state(atom) :: map
+
+  # Helpers
+
+  @doc """
+  Returns a list of running Queues
+
+  Used by Runner to get more enqueued arguments
+  """
+  @spec active() :: [atom]
+  def active() do
+    DynamicSupervisor.which_children(Ngauge.QueueSupervisor)
+    |> Enum.map(&elem(&1, 1))
+    |> Enum.map(&Process.info(&1, :registered_name))
+    |> Enum.map(&elem(&1, 1))
+  end
+
+  @spec state(atom | pid | {atom, any} | {:via, atom, any}) :: any
   def state(name) do
     Agent.get(name, & &1)
   end

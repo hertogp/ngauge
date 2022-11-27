@@ -10,11 +10,12 @@ defmodule Ngauge.Runner do
   """
 
   def run(args) do
+    # the initial set of workers to run, specified on the cli
+    # note: workers may enqueue arguments for other workers, so
+    # do_run/3 needs to check all active queues.
     workers = Options.get(:workers)
     max = Options.get(:max)
 
-    # TODO: start new queue's under a supervisor?
-    Enum.map(workers, &Queue.new/1)
     Enum.map(workers, &Queue.enq(&1, args, clear: true))
 
     jobs =
@@ -41,34 +42,23 @@ defmodule Ngauge.Runner do
 
   # not using do_run([],_,_) to appease Dialyzer, but why?
   @spec do_run([Job.t()], non_neg_integer, map) :: :ok
-  defp do_run(jobs, interval, max) when length(jobs) == 0 do
-    Process.sleep(1_000)
-    workers = Options.get(:workers)
-
-    jobs =
-      workers
-      |> Enum.map(fn w -> {w, Queue.deq(w, max)} end)
-      |> Enum.reduce([], fn {w, args}, acc -> [to_jobs(w, args) | acc] end)
-      |> List.flatten()
-
-    if Enum.count(jobs) > 0,
-      do: do_run(jobs, interval, max),
-      else: :ok
-  end
+  defp do_run(jobs, _interval, _max) when length(jobs) == 0,
+    do: :ok
 
   defp do_run(jobs, interval, max) do
-    workers = Options.get(:workers)
-
+    # workers = Options.get(:workers)
     {done, jobs} =
       jobs
       |> Enum.map(&Job.yield/1)
       |> Enum.split_with(&Job.done?/1)
 
+    # count the number of jobs running by their module name
+    # so we can get more (max - count) jobs up until max jobs
     active = Enum.frequencies_by(jobs, & &1.mod)
 
     more =
-      workers
-      |> Enum.map(fn w -> {w, Queue.deq(w, Map.get(active, w, 0))} end)
+      Queue.active()
+      |> Enum.map(fn w -> {w, Queue.deq(w, max - Map.get(active, w, 0))} end)
       |> Enum.reduce([], fn {w, args}, acc -> [to_jobs(w, args) | acc] end)
       |> List.flatten()
 

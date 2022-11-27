@@ -13,10 +13,11 @@ defmodule Ngauge.Worker.Chain do
       "1.1.1.1" -> Process.sleep(10_000)
       "1.1.1.2" -> Queue.enq(__MODULE__, ["badaboom!", "2.2.2.0/27"])
       "1.1.1.3" -> matherr(0)
+      "1.1.1.4" -> Queue.enq(Ngauge.Worker.Ping, [arg])
       _ -> nil
     end
 
-    (500 + :rand.uniform(1_500)) |> Process.sleep()
+    :rand.uniform(500) |> Process.sleep()
 
     ["cert1", "cert2", "cert3"] |> Enum.take(:rand.uniform(3))
   end

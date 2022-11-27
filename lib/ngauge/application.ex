@@ -10,6 +10,7 @@ defmodule Ngauge.Application do
     children = [
       Ngauge.Options,
       Ngauge.Progress,
+      {DynamicSupervisor, name: Ngauge.QueueSupervisor, strategy: :one_for_one},
       {Task.Supervisor, name: Ngauge.TaskSupervisor}
     ]
 
