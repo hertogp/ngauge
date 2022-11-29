@@ -13,7 +13,7 @@ defmodule Ngauge.Worker.Chain do
     case arg do
       "1.1.1.0" -> raise "boom"
       "1.1.1.1" -> Process.sleep(10_000)
-      "1.1.1.2" -> Queue.enq(__MODULE__, ["badaboom!", "2.2.2.0/30"])
+      "1.1.1.2" -> Queue.enq(__MODULE__, ["badaboom!", "2.2.2.0/31"])
       "1.1.1.3" -> matherr(0)
       "1.1.1.4" -> Queue.enq(Ngauge.Worker.Ping, [arg])
       _ -> nil

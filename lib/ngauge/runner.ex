@@ -24,6 +24,7 @@ defmodule Ngauge.Runner do
       |> List.flatten()
 
     # clear previous progress stats
+    Progress.clear_screen()
     Progress.update(jobs, clear: true)
     interval = Options.get(:interval) || 100
 

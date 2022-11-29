@@ -8,7 +8,8 @@ defmodule Ngauge.Progress do
   alias Ngauge.{Job, Queue, Worker}
 
   @width min(elem(:io.columns(), 1), 120)
-  @home IO.ANSI.home()
+  # @home IO.ANSI.home()
+  @home IO.ANSI.cursor(1, 1)
   @reset IO.ANSI.reset()
   @clear IO.ANSI.clear()
   @bright IO.ANSI.bright()
@@ -61,8 +62,17 @@ defmodule Ngauge.Progress do
   def clear(),
     do: Agent.update(__MODULE__, fn _ -> @state end)
 
-  def clear_screen(),
-    do: IO.ANSI.clear() |> IO.write()
+  @spec clear_screen() :: :ok
+  def clear_screen() do
+    # {:ok, rows} = :io.rows()
+
+    # Enum.each(1..rows, fn row ->
+    #   (IO.ANSI.cursor(row, 1) <> IO.ANSI.clear_line()) |> IO.write()
+    # end)
+
+    # :ok
+    @clear |> IO.write()
+  end
 
   def state(),
     do: Agent.get(__MODULE__, & &1)
@@ -92,11 +102,13 @@ defmodule Ngauge.Progress do
 
     stats = Enum.reduce(jobs, stats, &update_stats/2)
 
-    max = elem(:io.rows(), 1) - 8
+    max = elem(:io.rows(), 1) - 10
 
-    # TODO: donot keep actual jobs in state, just their string version
+    width = Map.get(state, :width, @width)
+
     done =
       Enum.filter(jobs, fn job -> job.status != :run end)
+      |> Enum.map(&jobline(&1, width))
       |> Kernel.++(state.jobs)
       |> Enum.take(max)
 
@@ -129,7 +141,7 @@ defmodule Ngauge.Progress do
     pad = state.width - String.length(name) - String.length(kids) - 6
 
     [
-      @clear,
+      # @clear,
       @home,
       @reset,
       @box_tl,
@@ -206,20 +218,20 @@ defmodule Ngauge.Progress do
   end
 
   defp joblines(acc, state) do
-    width = Map.get(state, :width, @width)
-
-    Enum.reduce(state.jobs, acc, fn job, acc ->
-      [@box_v, " ", jobline(job, width - 4), " ", @box_v, "\n" | acc]
+    Enum.reduce(state.jobs, acc, fn jobline, acc ->
+      [@box_v, " ", jobline, " ", @box_v, "\n" | acc]
     end)
   end
 
   defp jobline(job, max) do
+    # return a single string padded or limited to max - 4 chars since it
+    # will be wrapped in "| " and " |" by joblines.
     str = Job.to_string(job)
-    pad = max - String.length(str)
+    pad = max - String.length(str) - 4
 
     str =
       if pad < 0,
-        do: String.slice(str, 0..(max - 1)),
+        do: String.slice(str, 0..(max - 5)),
         else: [str, repeat(" ", pad)]
 
     [Map.get(@colors, job.status, @normal), str, @reset]
@@ -250,6 +262,4 @@ defmodule Ngauge.Progress do
 
     Map.put(stats, job.mod, new_stats)
   end
-
-  @spec clear_screen() :: :ok
 end

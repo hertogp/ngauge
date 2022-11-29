@@ -14,6 +14,8 @@ defmodule Ngauge.Worker.Ping do
     if arg == "1.1.1.4",
       do: raise("ping 1.1.1.4 is forbidden")
 
+    Pfx.new(arg)
+
     # take some time
     (1_000 + :rand.uniform(1_500)) |> Process.sleep()
 
@@ -22,10 +24,8 @@ defmodule Ngauge.Worker.Ping do
 
   def format(result) do
     case result do
-      x when is_exception(x) -> @name <> (Exception.message(x) |> String.slice(0, 50))
-      nil -> "nil"
       {min, avg, max} -> "min/avg/max #{min}/#{avg}/#{max} ms"
-      x -> "#{inspect(x)}"
+      x -> "** #{inspect(x)}"
     end
   end
 end
