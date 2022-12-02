@@ -22,7 +22,11 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 ngauge-*.tar
 
+# Ignore the escript binary
 /ngauge
+
+# Ignore the directory with log files
+/logs
 
 # Temporary files, for example, from tests.
 /tmp/

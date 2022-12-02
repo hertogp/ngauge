@@ -19,13 +19,17 @@ defmodule Ngauge.Worker.Ping do
     # take some time
     (1_000 + :rand.uniform(1_500)) |> Process.sleep()
 
-    {min, avg, max}
+    %{"min" => min, "avg" => avg, "max" => max}
+  end
+
+  def format(result) when is_map(result) do
+    keys = Map.keys(result) |> Enum.join("/")
+    vals = Map.values(result) |> Enum.join("/")
+
+    "#{keys} #{vals}"
   end
 
   def format(result) do
-    case result do
-      {min, avg, max} -> "min/avg/max #{min}/#{avg}/#{max} ms"
-      x -> "** #{inspect(x)}"
-    end
+    "** #{inspect(result)}"
   end
 end

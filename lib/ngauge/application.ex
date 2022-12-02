@@ -10,6 +10,9 @@ defmodule Ngauge.Application do
     children = [
       Ngauge.Options,
       Ngauge.Progress,
+      {Registry, keys: :unique, name: Ngauge.CsvRegistry},
+      {DynamicSupervisor, name: Ngauge.CsvSupervisor, strategy: :one_for_one},
+      {Registry, keys: :unique, name: Ngauge.QueueRegistry},
       {DynamicSupervisor, name: Ngauge.QueueSupervisor, strategy: :one_for_one},
       {Task.Supervisor, name: Ngauge.TaskSupervisor}
     ]

@@ -81,8 +81,6 @@ defmodule Ngauge.Queue do
     {new, state}
   end
 
-  @spec state(atom) :: map
-
   # Helpers
 
   @doc """
@@ -142,9 +140,4 @@ defmodule Ngauge.Queue do
       h -> take_args(tail, wanted, [h | acc])
     end
   end
-
-  # @spec to_jobs([binary], atom) :: [Job.t()]
-  # defp to_jobs(args, name) do
-  #   for arg <- args, do: Job.new(name, :run, arg)
-  # end
 end
