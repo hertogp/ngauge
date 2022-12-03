@@ -33,7 +33,7 @@ defmodule Ngauge.CLI do
     opts = %{
       :workers => Keyword.get_values(opts, :worker) |> to_modules([]),
       :max => Keyword.get(opts, :max, 20),
-      :csv => Keyword.get(opts, false),
+      :csv => Keyword.get(opts, :csv, false),
       :timeout => Keyword.get(opts, :timeout, 10_000),
       :interval => Keyword.get(opts, :interval, 100)
     }

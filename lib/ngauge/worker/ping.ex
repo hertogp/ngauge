@@ -3,8 +3,6 @@ defmodule Ngauge.Worker.Ping do
   A fake ping worker (for now)
   """
 
-  @name Module.split(__MODULE__) |> List.last()
-
   def run(arg) do
     min = :rand.uniform(100)
     max = min + :rand.uniform(50)
@@ -12,7 +10,7 @@ defmodule Ngauge.Worker.Ping do
 
     # Chain will enqueue 1.1.1.4 for Ping, we raise immediately
     if arg == "1.1.1.4",
-      do: raise("ping 1.1.1.4 is forbidden")
+      do: raise("pinging to 1.1.1.4 is forbidden")
 
     Pfx.new(arg)
 
@@ -22,14 +20,16 @@ defmodule Ngauge.Worker.Ping do
     %{"min" => min, "avg" => avg, "max" => max}
   end
 
-  def format(result) when is_map(result) do
+  @spec to_str(map) :: binary
+  def to_str(result) do
     keys = Map.keys(result) |> Enum.join("/")
     vals = Map.values(result) |> Enum.join("/")
 
     "#{keys} #{vals}"
   end
 
-  def format(result) do
-    "** #{inspect(result)}"
+  @spec to_csv(map) :: binary
+  def to_csv(result) do
+    "#{result["min"]},#{result["avg"]},#{result["max"]}"
   end
 end

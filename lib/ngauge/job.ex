@@ -35,6 +35,10 @@ defmodule Ngauge.Job do
 
   defguard is_job(job) when is_struct(job, __MODULE__)
 
+  @doc """
+  Starts a new async task (not linked) and wraps it inside a `t:Job.t()` struct.
+
+  """
   @spec new(atom, atom, any) :: t()
   def new(mod, fun, arg) when is_atom(mod) and is_atom(fun) do
     task =
@@ -54,6 +58,16 @@ defmodule Ngauge.Job do
     }
   end
 
+  @doc """
+  Check a `job` for results, returning a possibly updated Job struct.
+
+  After a yield, the `job`'s status may be one of:
+  - `:run`, the job is still running and has not yet expired
+  - `:done`, the job completed normally and has some valid `result`
+  - `:exit`, the job crashed, `result` may indicate the reason
+  - `:timeout`, the job expired and `result` will be nil
+
+  """
   @spec yield(t()) :: t()
   def yield(%__MODULE__{status: :run} = job) do
     case Task.yield(job.task, 1) do
@@ -78,6 +92,10 @@ defmodule Ngauge.Job do
     end
   end
 
+  @doc """
+  Returns true if the `job` is no longer running, false otherwise.
+
+  """
   @spec done?(t()) :: boolean
   def done?(%__MODULE__{status: :run} = job) when is_job(job),
     do: false
@@ -98,9 +116,16 @@ defmodule Ngauge.Job do
     end
   end
 
-  def alive?(job) do
-    Process.alive?(job.task.pid)
-  end
+  @doc """
+  Returns true if the `job`'s task is still alive and running.
+
+  This differs from `done?/1` which only checks the `job`'s `status`,
+  while this function actually checks the task's pid.
+
+  """
+  @spec alive?(t()) :: boolean
+  def alive?(job),
+    do: Process.alive?(job.task.pid)
 
   @doc """
   Returns true if a job's `age/1` exceeds Options' `:timeout`, false otherwise.
@@ -110,16 +135,67 @@ defmodule Ngauge.Job do
   def expired?(job),
     do: age(job) > (Options.get(:timeout) || 5_000)
 
-  @spec to_string(t()) :: binary
-  def to_string(job) do
+  @doc """
+  Returns a string representation of given `job`.
+
+  Mainly usefull for `Ngauge.Progress`.
+
+  """
+  @spec to_str(t()) :: binary
+  def to_str(%__MODULE__{status: :done} = job) do
     result =
-      case function_exported?(job.mod, :format, 1) do
-        true -> apply(job.mod, :format, [job.result])
-        _ -> "#{inspect(job.result)}"
+      case function_exported?(job.mod, :to_str, 1) do
+        true -> apply(job.mod, :to_str, [job.result])
+        _ -> "missing to_str #{inspect(job.result)}"
       end
 
     # worker = Module.split(job.mod) |> List.last()
     "#{job.name}(#{job.arg}) #{job.status} #{age(job)}ms #{result}"
+  end
+
+  def to_str(%__MODULE__{status: :exit} = job) do
+    err =
+      case elem(job.result, 0) do
+        x when is_exception(x) -> Exception.message(x)
+        _ -> "#{inspect(job.result)}"
+      end
+
+    "#{job.name}(#{job.arg}) #{job.status} #{age(job)}ms #{err}"
+  end
+
+  # in case of :timeout, :run, there are no results
+  def to_str(job) do
+    "#{job.name}(#{job.arg}) #{job.status} #{age(job)} ms"
+  end
+
+  @doc """
+  Returns a list of csv-lines representing given `job`'s results.
+
+  Each line always starts with: `name, argument, status, age`.
+  When the `job` status is `:done`, the underlying worker yields
+  the csv-representation of the `job.result`, which is appended.
+
+  Any other status will have the inspected `job.result` added as
+  a single field.
+
+  """
+  @spec to_csv(t()) :: [binary]
+  def to_csv(%__MODULE__{status: :done} = job) do
+    start = "#{job.name},#{job.arg},#{job.status},#{age(job)},"
+
+    result =
+      case function_exported?(job.mod, :to_csv, 1) do
+        true -> apply(job.mod, :to_csv, [job.result])
+        _ -> "missing to_csv -> #{inspect(job.result)}"
+      end
+      |> List.wrap()
+
+    Enum.map(result, fn line -> start <> line end)
+  end
+
+  def to_csv(job) do
+    result = "#{inspect(job.result)}"
+    ["#{job.name},#{job.arg},#{job.status},#{age(job)},\"#{result}\""]
   end
 
   defp timestamp,

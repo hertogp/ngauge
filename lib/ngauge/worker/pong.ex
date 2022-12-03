@@ -9,14 +9,19 @@ defmodule Ngauge.Worker.Pong do
     avg = div(min + max, 2)
     (3_000 + :rand.uniform(1_500)) |> Process.sleep()
 
-    {min, avg, max}
+    %{"min" => min, "avg" => avg, "max" => max}
   end
 
-  def format(result) do
-    case result do
-      x when is_exception(x) -> Exception.message(x) |> String.slice(0, 50)
-      nil -> "nil"
-      {min, avg, max} -> "min/avg/max #{min}/#{avg}/#{max} ms"
-    end
+  @spec to_str(map) :: binary
+  def to_str(result) do
+    keys = Map.keys(result) |> Enum.join("/")
+    vals = Map.values(result) |> Enum.join("/")
+
+    "#{keys} #{vals}"
+  end
+
+  @spec to_csv(map) :: binary
+  def to_csv(result) do
+    "#{result["min"]},#{result["avg"]},#{result["max"]}"
   end
 end

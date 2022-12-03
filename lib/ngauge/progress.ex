@@ -15,16 +15,16 @@ defmodule Ngauge.Progress do
   @bright IO.ANSI.bright()
   @normal IO.ANSI.normal()
   @green IO.ANSI.green()
-  @yellow IO.ANSI.yellow()
+  @yellow IO.ANSI.color(3, 3, 0)
   @colors %{
     :done => IO.ANSI.green(),
     :exit => IO.ANSI.red(),
     :timeout => IO.ANSI.bright() <> IO.ANSI.yellow(),
     :run => IO.ANSI.normal()
   }
-  @bar_failed @reset <> @yellow
-  @bar_succes @reset <> @green
-  @bar_todos @reset <> IO.ANSI.light_black()
+  @bar_failed @yellow
+  @bar_succes @green
+  @bar_todos IO.ANSI.light_black()
   # see https://en.wikipedia.org/wiki/List_of_Unicode_characters#Box_Drawing
   # or https://jrgraphix.net/r/Unicode/2500-257F
   @bar_on "\u25AE"
@@ -43,9 +43,8 @@ defmodule Ngauge.Progress do
   # state %{
   #   stats => %{job.name => {done, timeout, exit, run}},
   #   jobs  => [jobs_that_are_done]
-  #   max => max jobs results to display
-  #   max_rows => height of terminal
-  #   max_cols => width of terminal
+  #   width => width of progress screen
+  #   height => height of progress screen
   # }
   @state %{
     stats: %{},
@@ -64,14 +63,7 @@ defmodule Ngauge.Progress do
 
   @spec clear_screen() :: :ok
   def clear_screen() do
-    # {:ok, rows} = :io.rows()
-
-    # Enum.each(1..rows, fn row ->
-    #   (IO.ANSI.cursor(row, 1) <> IO.ANSI.clear_line()) |> IO.write()
-    # end)
-
-    # :ok
-    @clear |> IO.write()
+    IO.write(@clear)
   end
 
   def state(),
@@ -226,7 +218,7 @@ defmodule Ngauge.Progress do
   defp jobline(job, max) do
     # return a single string padded or limited to max - 4 chars since it
     # will be wrapped in "| " and " |" by joblines.
-    str = Job.to_string(job)
+    str = Job.to_str(job)
     pad = max - String.length(str) - 4
 
     str =

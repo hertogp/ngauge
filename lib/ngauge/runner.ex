@@ -1,5 +1,5 @@
 defmodule Ngauge.Runner do
-  alias Ngauge.{Job, Options, Queue, Progress}
+  alias Ngauge.{Csv, Job, Options, Queue, Progress}
 
   @doc """
   Asynchronously process arguments using max N processes per worker type.
@@ -57,6 +57,9 @@ defmodule Ngauge.Runner do
 
     jobs = jobs ++ more
     Progress.update(jobs ++ done)
+
+    if Options.get(:csv),
+      do: Enum.map(done, &Csv.write/1)
 
     Process.sleep(interval)
     do_run(jobs, interval, max)

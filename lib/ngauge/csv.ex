@@ -1,20 +1,18 @@
 defmodule Ngauge.Csv do
   use GenServer
 
-  alias Ngauge.{Worker, CsvRegistry, CsvSupervisor}
+  alias Ngauge.{Worker, CsvRegistry, CsvSupervisor, Job}
 
-  # Notes
-  # Caller code needs to start Csv writes as follows:
-  # -  DynamicSupervisor.start_child(Ngauge.CsvSupervisor, {Ngauge.Csv, Ngauge.Worker.Ping})
+  # notes:
+  # - caller code needs to start Csv writes as follows:
+  ## DynamicSupervisor.start_child(Ngauge.CsvSupervisor, {Ngauge.Csv, Ngauge.Worker.Ping})
 
   # Client API
 
   @spec start(atom) :: :ignore | {:error, any} | {:ok, pid, any}
   def start(worker) do
-    # starting through DynamicSupervisor & CsvSupervisor will call:
-    # - __MODULE__.child_spec
-    # - __MODULE__.start_link
-    # - __MODULE__.init
+    # starting through DynamicSupervisor & CsvSupervisor will trigger calls:
+    # -> child_spec, start_link and init
     IO.puts("#{__MODULE__}.start(#{inspect(worker)}) was called by pid #{inspect(self())}")
 
     case GenServer.whereis(via(worker)) do
@@ -23,38 +21,40 @@ defmodule Ngauge.Csv do
     end
   end
 
+  @spec stop(module) :: :ok | {:error, {:noproc, module}}
   def stop(worker) do
-    IO.puts("#{__MODULE__}.stop(#{inspect(worker)} was called, pid #{inspect(self())}")
     # alternative (which only calls terminate/1 when we're trapping exists):
-    # pid = GenServer.whereis(via(worker))
-    # DynamicSupervisor.terminate_child(CsvSupervisor, pid)
+    ## pid = GenServer.whereis(via(worker))
+    ## DynamicSupervisor.terminate_child(CsvSupervisor, pid)
     case GenServer.whereis(via(worker)) do
       nil -> {:error, {:noproc, worker}}
       pid -> GenServer.stop(pid)
     end
   end
 
-  @spec start_link(atom) :: :ignore | {:error, any} | {:ok, pid}
-  def start_link(worker) do
-    IO.puts("#{__MODULE__}.start_link(#{worker}) was called")
+  @spec write(Job.t()) :: :ok
+  def write(job) do
+    unless GenServer.whereis(via(job.mod)),
+      do: start(job.mod)
 
+    GenServer.cast(via(job.mod), {:write, job})
+  end
+
+  @spec start_link(module) :: :ignore | {:error, module} | {:ok, pid}
+  def start_link(worker) do
     if Worker.worker?(worker) do
       nicname = Worker.name(worker)
       fpath = Path.expand("./logs/#{nicname}.csv")
       dpath = Path.dirname(fpath)
       :ok = File.mkdir_p(dpath)
-      {:ok, fp} = File.open(fpath, [:append])
-      # fp is an io_device which is the pid of the process handling the file
-      # `-> it is linked to us and when we exit, fp-process will close the file
-      # see https://www.erlang.org/doc/man/file.html#open-2
-      # -> :delayed_write seems to have no effect
-
-      GenServer.start_link(__MODULE__, {nicname, fpath, fp}, name: via(worker))
+      {:ok, fp} = File.open(fpath, [:append, :delayed_write])
+      GenServer.start_link(__MODULE__, {fpath, fp}, name: via(worker))
     else
       {:error, {:noworker, worker}}
     end
   end
 
+  @spec via(module) :: {:via, module, {module, name: module}}
   def via(worker),
     do: {:via, Registry, {CsvRegistry, name: worker}}
 
@@ -64,8 +64,6 @@ defmodule Ngauge.Csv do
   terminates abnormally.
   """
   def child_spec(name) do
-    IO.puts("#{__MODULE__}.child_spec(#{name}) called with #{name}")
-
     %{
       id: __MODULE__,
       start: {__MODULE__, :start_link, [name]},
@@ -73,14 +71,11 @@ defmodule Ngauge.Csv do
     }
   end
 
-  def write(worker, str) do
-    GenServer.cast(via(worker), {:write, str})
-  end
-
-  # Server (callbacks)
+  # GenServer callbacks
 
   @impl true
-  def init({_nicname, _path, _fp} = state) do
+  @spec init(any) :: {:ok, any}
+  def init(state) do
     # trapping exits => GenServer's handle_info will call our terminate
     IO.puts("#{__MODULE__}.init(#{inspect(state)}) was called")
     Process.flag(:trap_exit, true)
@@ -88,20 +83,23 @@ defmodule Ngauge.Csv do
   end
 
   @impl true
-  def terminate(reason, {nicname, fpath, fp}) do
+  @spec terminate(any, any) :: :ok
+  def terminate(_reason, {_fpath, fp}) do
     # cleanup: maybe add empty line and close fp
-    IO.puts("terminate #{nicname}, reason #{inspect(reason)}, closing -> #{fpath}")
     File.close(fp)
     :ok
   end
 
   @impl true
-  def handle_cast({:write, str}, {nicname, path, fp} = state) do
-    IO.puts("writing #{str} to #{path} for #{nicname}")
+  def handle_cast({:write, job}, {_path, fp} = state) do
     # {"ok, fd} = File.open(path, [:raw, :append, {:delayed_write, 64_000, 10_000}])
     # :file.write(fd, "some binary << 64 KB")
     # `-> data is written every 64KB or every 10sec
-    IO.write(fp, str)
+    lines =
+      Job.to_csv(job)
+      |> Enum.intersperse("\n")
+
+    IO.write(fp, [lines, "\n"])
     {:noreply, state}
   end
 end

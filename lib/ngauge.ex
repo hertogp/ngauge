@@ -45,6 +45,8 @@ defmodule Ngauge do
   [ ] chain submits additional hostnames based on SAN names for itself
   [ ] chain submits additional A/AAAA checks based on SAN names
   [ ] cert checks validity of cert chain and days remaining
+  [ ] crtsh to retrieve all certs issued for some name
+      Either use htpps://crt.sh/json?q=domain or connect to their database
   [ ] ping actually pings (icmp)
   [ ] httping retrieves http and/or https header and time last modified
 
