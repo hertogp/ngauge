@@ -29,12 +29,23 @@ defmodule Ngauge.Csv do
     # -> child_spec, start_link and init
     case GenServer.whereis(via(worker)) do
       nil -> DynamicSupervisor.start_child(CsvSupervisor, {__MODULE__, worker})
-      pid -> {:ok, {:already_started, pid}}
+      pid -> {:ok, pid}
+    end
+  end
+
+  @spec start_link(module) :: :ignore | {:error, module} | {:ok, pid}
+  def start_link(worker) do
+    if Worker.worker?(worker) do
+      GenServer.start_link(__MODULE__, worker, name: via(worker))
+    else
+      {:error, {:noworker, worker}}
     end
   end
 
   @doc """
-  Stop a CSV-writer process for given worker module
+  Stop a CSV-writer process for given worker module.
+
+  The GenServer will Call the process' `terminate/1` function.
 
   """
   @spec stop(module) :: :ok | {:error, {:noproc, module}}
@@ -57,50 +68,32 @@ defmodule Ngauge.Csv do
     name = via(job.mod)
 
     # alternatively use:
-    ## Registry.lookup(Ngauge.CsvRegistry, [name: job.mod])
+    ## Registry.lookup(CsvRegistry, [name: job.mod])
     unless GenServer.whereis(name),
       do: start(job.mod)
 
     GenServer.cast(name, {:write, job})
   end
 
-  # GenServer callbacks
-
-  @spec start_link(module) :: :ignore | {:error, module} | {:ok, pid}
-  def start_link(worker) do
-    if Worker.worker?(worker) do
-      GenServer.start_link(__MODULE__, worker, name: via(worker))
-    else
-      {:error, {:noworker, worker}}
-    end
-  end
-
   @spec via(module) :: {:via, module, {module, name: module}}
   def via(worker),
     do: {:via, Registry, {CsvRegistry, name: worker}}
 
-  @doc """
-  This function will be called by the supervisor to retrieve the specification 
-  of the child process.The child process is configured to restart only if it 
-  terminates abnormally.
-  """
-  def child_spec(worker) do
-    %{
-      id: worker,
-      start: {__MODULE__, :start_link, [worker]},
-      restart: :transient
-    }
-  end
+  # GenServer Callbacks
 
   @impl true
-  @spec init(module) :: {:ok, nil, {:continue, module}}
-  def init(worker) do
-    # trapping exits => the {:EXIT, _} message is handled by GenServer's handle_info
-    # will call our terminate *iff* we're trapping exits.
-    Process.flag(:trap_exit, true)
-    {:ok, nil, {:continue, worker}}
+  def handle_cast({:write, job}, {_path, fp} = state) do
+    # {"ok, fd} = File.open(path, [:raw, :append, {:delayed_write, 64_000, 10_000}])
+    # :file.write(fd, "some binary << 64 KB")
+    # `-> data is written every 64KB or every 10sec
+    IO.write(fp, Job.to_csv(job))
+    {:noreply, state}
   end
 
+  @doc """
+  Opens the csv-file for this writer, adding csv headers when needed.
+
+  """
   @impl true
   @spec handle_continue(module, nil) :: {:noreply, {binary, File.t()}}
   def handle_continue(worker, nil) do
@@ -113,11 +106,19 @@ defmodule Ngauge.Csv do
 
     if fstat.size == 0 do
       headers = Job.csv_headers(worker)
-      IO.inspect(headers, label: :headers)
       IO.write(fp, [headers, "\n"])
     end
 
     {:noreply, {fpath, fp}}
+  end
+
+  @impl true
+  @spec init(module) :: {:ok, nil, {:continue, module}}
+  def init(worker) do
+    # trapping exits => the {:EXIT, _} message is handled by GenServer's handle_info
+    # will call our terminate *iff* we're trapping exits.
+    Process.flag(:trap_exit, true)
+    {:ok, nil, {:continue, worker}}
   end
 
   @impl true
@@ -128,12 +129,21 @@ defmodule Ngauge.Csv do
     :ok
   end
 
-  @impl true
-  def handle_cast({:write, job}, {_path, fp} = state) do
-    # {"ok, fd} = File.open(path, [:raw, :append, {:delayed_write, 64_000, 10_000}])
-    # :file.write(fd, "some binary << 64 KB")
-    # `-> data is written every 64KB or every 10sec
-    IO.write(fp, Job.to_csv(job))
-    {:noreply, state}
+  # DynamicSupervisor API
+
+  @doc """
+  Returns a child specification that:
+  - ensures a child is only restarted if it terminated abnormally
+  - allows children 20 sec to clean up (i.e. close the file)
+  - names this module's `:start_link` to start the process
+  - sets the `:id` to the worker module (1 per worker type)
+  """
+  def child_spec(worker) do
+    %{
+      id: worker,
+      start: {__MODULE__, :start_link, [worker]},
+      restart: :transient,
+      shutdown: 20_000
+    }
   end
 end
