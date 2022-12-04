@@ -35,7 +35,8 @@ defmodule Ngauge.CLI do
       :max => Keyword.get(opts, :max, 20),
       :csv => Keyword.get(opts, :csv, false),
       :timeout => Keyword.get(opts, :timeout, 10_000),
-      :interval => Keyword.get(opts, :interval, 100)
+      :interval => Keyword.get(opts, :interval, 100),
+      :batch => NaiveDateTime.local_now() |> NaiveDateTime.to_iso8601()
     }
 
     Options.set_state(opts)

@@ -19,9 +19,10 @@ defmodule Ngauge.Job do
   alias Ngauge.{Worker, Options}
 
   @enforce_keys [:mod, :fun]
-  defstruct [:mod, :fun, :name, :arg, :task, :status, :result, :started, :stopped]
+  defstruct [:batch, :mod, :fun, :name, :arg, :task, :status, :result, :started, :stopped]
 
   @type t() :: %__MODULE__{
+          batch: binary,
           mod: atom,
           fun: atom,
           name: binary,
@@ -46,6 +47,7 @@ defmodule Ngauge.Job do
       |> Task.Supervisor.async_nolink(mod, fun, [arg])
 
     %__MODULE__{
+      batch: Options.get(:batch),
       mod: mod,
       fun: fun,
       name: Worker.name(mod),
@@ -171,31 +173,39 @@ defmodule Ngauge.Job do
   @doc """
   Returns a list of csv-lines representing given `job`'s results.
 
-  Each line always starts with: `name, argument, status, age`.
+  Each line always starts with: `batch,name,argument,status,age`.
   When the `job` status is `:done`, the underlying worker yields
   the csv-representation of the `job.result`, which is appended.
 
-  Any other status will have the inspected `job.result` added as
-  a single field.
+  If the job crashed or timedout, a single file "n/a" is appended.
 
   """
-  @spec to_csv(t()) :: [binary]
-  def to_csv(%__MODULE__{status: :done} = job) do
-    start = "#{job.name},#{job.arg},#{job.status},#{age(job)},"
+  @spec to_csv(t()) :: [[binary]]
+  def to_csv(job) do
+    start =
+      ["#{job.batch}", "#{job.name}", "#{job.arg}", "#{job.status}", "#{age(job)}"]
+      |> Enum.intersperse(",")
 
-    result =
-      case function_exported?(job.mod, :to_csv, 1) do
-        true -> apply(job.mod, :to_csv, [job.result])
-        _ -> "missing to_csv -> #{inspect(job.result)}"
+    lines =
+      case job.status do
+        :done -> apply(job.mod, :to_csv, [job.result])
+        _ -> [["n/a"]]
       end
-      |> List.wrap()
 
-    Enum.map(result, fn line -> start <> line end)
+    Enum.map(lines, fn line -> [start, ",", Enum.intersperse(line, ","), "\n"] end)
   end
 
-  def to_csv(job) do
-    result = "#{inspect(job.result)}"
-    ["#{job.name},#{job.arg},#{job.status},#{age(job)},\"#{result}\""]
+  @doc """
+  Returns the csv-headers for given `job`'s worker implementation.
+
+  """
+  @spec csv_headers(module) :: [binary]
+  def csv_headers(module) do
+    prefix = ~w(batch name argument status duration)
+    fields = apply(module, :csv_headers, [])
+
+    (prefix ++ fields)
+    |> Enum.intersperse(",")
   end
 
   defp timestamp,

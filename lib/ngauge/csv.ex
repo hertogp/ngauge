@@ -3,24 +3,40 @@ defmodule Ngauge.Csv do
 
   alias Ngauge.{Worker, CsvRegistry, CsvSupervisor, Job}
 
-  # notes:
-  # - caller code needs to start Csv writes as follows:
-  ## DynamicSupervisor.start_child(Ngauge.CsvSupervisor, {Ngauge.Csv, Ngauge.Worker.Ping})
-
   # Client API
 
+  @doc """
+  Lists the active CSV-writers by name.
+  """
+  @spec active() :: [atom]
+  def active() do
+    # - CsvRegistry has unique keys and registers csv-writers by worker module name
+    CsvSupervisor
+    |> DynamicSupervisor.which_children()
+    |> Enum.map(fn {_, pid, _, _} -> Registry.keys(CsvRegistry, pid) end)
+    |> List.flatten()
+    |> Enum.map(&elem(&1, 1))
+    |> Enum.sort()
+  end
+
+  @doc """
+  Start a CSV-writer process for given worker module
+
+  """
   @spec start(atom) :: :ignore | {:error, any} | {:ok, pid, any}
   def start(worker) do
     # starting through DynamicSupervisor & CsvSupervisor will trigger calls:
     # -> child_spec, start_link and init
-    IO.puts("#{__MODULE__}.start(#{inspect(worker)}) was called by pid #{inspect(self())}")
-
     case GenServer.whereis(via(worker)) do
       nil -> DynamicSupervisor.start_child(CsvSupervisor, {__MODULE__, worker})
       pid -> {:ok, {:already_started, pid}}
     end
   end
 
+  @doc """
+  Stop a CSV-writer process for given worker module
+
+  """
   @spec stop(module) :: :ok | {:error, {:noproc, module}}
   def stop(worker) do
     # alternative (which only calls terminate/1 when we're trapping exists):
@@ -32,23 +48,28 @@ defmodule Ngauge.Csv do
     end
   end
 
+  @doc """
+  Write to csv-file for given `job`.
+
+  """
   @spec write(Job.t()) :: :ok
   def write(job) do
-    unless GenServer.whereis(via(job.mod)),
+    name = via(job.mod)
+
+    # alternatively use:
+    ## Registry.lookup(Ngauge.CsvRegistry, [name: job.mod])
+    unless GenServer.whereis(name),
       do: start(job.mod)
 
-    GenServer.cast(via(job.mod), {:write, job})
+    GenServer.cast(name, {:write, job})
   end
+
+  # GenServer callbacks
 
   @spec start_link(module) :: :ignore | {:error, module} | {:ok, pid}
   def start_link(worker) do
     if Worker.worker?(worker) do
-      nicname = Worker.name(worker)
-      fpath = Path.expand("./logs/#{nicname}.csv")
-      dpath = Path.dirname(fpath)
-      :ok = File.mkdir_p(dpath)
-      {:ok, fp} = File.open(fpath, [:append, :delayed_write])
-      GenServer.start_link(__MODULE__, {fpath, fp}, name: via(worker))
+      GenServer.start_link(__MODULE__, worker, name: via(worker))
     else
       {:error, {:noworker, worker}}
     end
@@ -63,23 +84,40 @@ defmodule Ngauge.Csv do
   of the child process.The child process is configured to restart only if it 
   terminates abnormally.
   """
-  def child_spec(name) do
+  def child_spec(worker) do
     %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, [name]},
+      id: worker,
+      start: {__MODULE__, :start_link, [worker]},
       restart: :transient
     }
   end
 
-  # GenServer callbacks
+  @impl true
+  @spec init(module) :: {:ok, nil, {:continue, module}}
+  def init(worker) do
+    # trapping exits => the {:EXIT, _} message is handled by GenServer's handle_info
+    # will call our terminate *iff* we're trapping exits.
+    Process.flag(:trap_exit, true)
+    {:ok, nil, {:continue, worker}}
+  end
 
   @impl true
-  @spec init(any) :: {:ok, any}
-  def init(state) do
-    # trapping exits => GenServer's handle_info will call our terminate
-    IO.puts("#{__MODULE__}.init(#{inspect(state)}) was called")
-    Process.flag(:trap_exit, true)
-    {:ok, state}
+  @spec handle_continue(module, nil) :: {:noreply, {binary, File.t()}}
+  def handle_continue(worker, nil) do
+    name = Worker.name(worker)
+    fpath = Path.expand("./logs/#{name}.csv")
+    dpath = Path.dirname(fpath)
+    :ok = File.mkdir_p(dpath)
+    {:ok, fp} = File.open(fpath, [:append, :delayed_write])
+    {:ok, fstat} = File.stat(fpath)
+
+    if fstat.size == 0 do
+      headers = Job.csv_headers(worker)
+      IO.inspect(headers, label: :headers)
+      IO.write(fp, [headers, "\n"])
+    end
+
+    {:noreply, {fpath, fp}}
   end
 
   @impl true
@@ -95,11 +133,7 @@ defmodule Ngauge.Csv do
     # {"ok, fd} = File.open(path, [:raw, :append, {:delayed_write, 64_000, 10_000}])
     # :file.write(fd, "some binary << 64 KB")
     # `-> data is written every 64KB or every 10sec
-    lines =
-      Job.to_csv(job)
-      |> Enum.intersperse("\n")
-
-    IO.write(fp, [lines, "\n"])
+    IO.write(fp, Job.to_csv(job))
     {:noreply, state}
   end
 end

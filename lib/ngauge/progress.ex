@@ -12,10 +12,11 @@ defmodule Ngauge.Progress do
   @home IO.ANSI.cursor(1, 1)
   @reset IO.ANSI.reset()
   @clear IO.ANSI.clear()
-  @bright IO.ANSI.bright()
+  # @bright IO.ANSI.bright()
   @normal IO.ANSI.normal()
   @green IO.ANSI.green()
   @yellow IO.ANSI.color(3, 3, 0)
+  @white IO.ANSI.white()
   @colors %{
     :done => IO.ANSI.green(),
     :exit => IO.ANSI.red(),
@@ -139,8 +140,8 @@ defmodule Ngauge.Progress do
       @box_tl,
       @box_h,
       @box_vl,
-      @bright,
-      @green,
+      # @bright,
+      @white,
       name,
       @reset,
       @box_vr,
@@ -186,8 +187,7 @@ defmodule Ngauge.Progress do
     [
       @box_v,
       " ",
-      @bright,
-      @green,
+      @normal,
       name,
       @reset,
       " ",

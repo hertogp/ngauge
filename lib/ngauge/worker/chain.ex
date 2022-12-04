@@ -6,6 +6,8 @@ defmodule Ngauge.Worker.Chain do
   """
   alias Ngauge.Queue
 
+  @behaviour Ngauge.Worker
+
   @spec run(binary) :: [binary]
   def run(arg) do
     # special arguments with special (re)actions
@@ -24,23 +26,22 @@ defmodule Ngauge.Worker.Chain do
     ["cert1", "cert2", "cert3"] |> Enum.take(:rand.uniform(3))
   end
 
-  def format(result) do
-    case result do
-      x when is_exception(x) -> Exception.message(x)
-      x -> "#{inspect(x)}"
-    end
-  end
-
   @spec to_str([any]) :: binary
   def to_str(result) do
     "saw #{Enum.count(result)} certs -- " <> Enum.join(result, ", ")
   end
 
-  @spec to_csv([any]) :: [binary]
+  @spec to_csv([any]) :: [[binary]]
   def to_csv(result) do
     result
-    |> Enum.with_index(fn elm, idx -> "#{idx},#{elm}" end)
+    |> Enum.with_index(fn elm, idx -> ["#{idx}", "#{elm}"] end)
   end
+
+  @spec csv_headers() :: [binary]
+  def csv_headers(),
+    do: ~w(idx cert)
+
+  # Helpers
 
   defp matherr(n), do: 1 / n
 end

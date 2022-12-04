@@ -3,6 +3,18 @@ defmodule Ngauge.Worker do
   Utility functions for workers
   """
 
+  # Worker Behaviour
+  @callback run(arg :: binary) :: any
+  @callback to_str(arg :: any) :: binary
+  @callback to_csv(arg :: any) :: [[binary]]
+  @callback csv_headers() :: [binary]
+
+  # Utility functions
+
+  @doc """
+  Returns lowercased string of the last label in the `worker`'s module.
+
+  """
   @spec name(atom) :: binary
   def name(worker) when is_atom(worker) do
     worker
@@ -11,6 +23,10 @@ defmodule Ngauge.Worker do
     |> String.downcase(:ascii)
   end
 
+  @doc """
+  Returns `treu` if given `module` is a valid Ngauge.Worker.<module> or not.
+
+  """
   @spec worker?(atom) :: boolean
   def worker?(module) do
     if Code.ensure_loaded?(module) do

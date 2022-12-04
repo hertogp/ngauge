@@ -3,6 +3,9 @@ defmodule Ngauge.Worker.Pong do
   A fake ping worker (for now)
   """
 
+  @behaviour Ngauge.Worker
+
+  @spec run(binary) :: map
   def run(_arg) do
     min = :rand.uniform(100)
     max = min + :rand.uniform(50)
@@ -20,8 +23,12 @@ defmodule Ngauge.Worker.Pong do
     "#{keys} #{vals}"
   end
 
-  @spec to_csv(map) :: binary
+  @spec to_csv(map) :: [[binary]]
   def to_csv(result) do
-    "#{result["min"]},#{result["avg"]},#{result["max"]}"
+    [["#{result["min"]},#{result["avg"]},#{result["max"]}"]]
   end
+
+  @spec csv_headers() :: [binary]
+  def csv_headers(),
+    do: ~w(min avg max)
 end

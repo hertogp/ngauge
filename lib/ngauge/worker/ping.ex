@@ -3,7 +3,10 @@ defmodule Ngauge.Worker.Ping do
   A fake ping worker (for now)
   """
 
-  def run(arg) do
+  @behaviour Ngauge.Worker
+
+  @spec run(binary) :: map
+  def run(arg) when is_binary(arg) do
     min = :rand.uniform(100)
     max = min + :rand.uniform(50)
     avg = div(min + max, 2)
@@ -20,6 +23,10 @@ defmodule Ngauge.Worker.Ping do
     %{"min" => min, "avg" => avg, "max" => max}
   end
 
+  @doc """
+  Returns a string representation of the result
+
+  """
   @spec to_str(map) :: binary
   def to_str(result) do
     keys = Map.keys(result) |> Enum.join("/")
@@ -28,8 +35,21 @@ defmodule Ngauge.Worker.Ping do
     "#{keys} #{vals}"
   end
 
-  @spec to_csv(map) :: binary
+  @doc """
+  Returns a csv-representation of the result
+
+  """
+  @spec to_csv(map) :: [[binary]]
   def to_csv(result) do
-    "#{result["min"]},#{result["avg"]},#{result["max"]}"
+    [["#{result["min"]}", "#{result["avg"]}", "#{result["max"]}"]]
+  end
+
+  @doc """
+  Returns the csv headers for the result fields
+
+  """
+  @spec csv_headers() :: [binary]
+  def csv_headers() do
+    ~w(min avg max)
   end
 end

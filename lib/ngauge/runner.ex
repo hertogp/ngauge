@@ -12,10 +12,15 @@ defmodule Ngauge.Runner do
     # the initial set of workers to run, specified on the cli
     # note: workers may enqueue arguments for other workers, so
     # do_run/3 needs to check all active queues.
-    workers = (Options.get(:workers) ++ Queue.active()) |> Enum.uniq()
+    workers = Options.get(:workers) |> Enum.uniq()
     max = Options.get(:max)
 
-    Enum.map(workers, &Queue.enq(&1, args, clear: true))
+    # clear all active queues first, mainly for when main/1 is run
+    # repeatedly inside iex (Queue's remain alive in that case and the stats
+    # get skewed.
+    Queue.active() |> Enum.map(&Queue.clear/1)
+
+    Enum.map(workers, &Queue.enq(&1, args))
 
     jobs =
       workers
@@ -35,8 +40,13 @@ defmodule Ngauge.Runner do
 
   # not using do_run([],_,_) to appease Dialyzer, but why?
   @spec do_run([Job.t()], non_neg_integer, map) :: :ok
-  defp do_run(jobs, _interval, _max) when length(jobs) == 0,
-    do: :ok
+  defp do_run(jobs, _interval, _max) when length(jobs) == 0 do
+    # stop the csv-writers and close their open file handles
+    Csv.active()
+    |> Enum.map(&Csv.stop/1)
+
+    :ok
+  end
 
   defp do_run(jobs, interval, max) do
     # workers = Options.get(:workers)

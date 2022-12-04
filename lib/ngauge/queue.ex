@@ -3,14 +3,14 @@ defmodule Ngauge.Queue do
   A simple job queue from which N-jobs can be taken.
 
   The queue is initialized to an empty queue and arguments can be
-  passed into the queue using `enqueue` and jobs are handed out
-  via `dequeue/1`.
+  passed into the queue using `enq/2` and jobs are handed out
+  via `deq/1`.
 
   """
 
   use Agent
 
-  alias Ngauge.{Job, Worker}
+  alias Ngauge.{Job, Queue, QueueSupervisor, Worker}
   alias Pfx
 
   # args is the list of arguments to be mined given a certain demand
@@ -28,7 +28,7 @@ defmodule Ngauge.Queue do
     # is already up or needs to be started.  Reason is that workers may
     # find new targets they would like to enqueue, either for themselves
     # of another worker they know of.
-    DynamicSupervisor.start_child(Ngauge.QueueSupervisor, {Ngauge.Queue, module})
+    DynamicSupervisor.start_child(QueueSupervisor, {Queue, module})
   end
 
   @spec start_link(any) :: {:error, any} | {:ok, pid}
@@ -38,47 +38,39 @@ defmodule Ngauge.Queue do
       else: {:error, {:noworker, name}}
   end
 
-  @spec enq(atom, [binary], Keyword.t()) :: :ok
-  def enq(name, args, opts \\ []) do
-    unless Process.whereis(name) do
-      # {Ngauge.Queue, name}
-      child_spec = %{id: name, start: {Ngauge.Queue, :start_link, [name]}}
-      {:ok, _pid} = DynamicSupervisor.start_child(Ngauge.QueueSupervisor, child_spec)
-    end
+  @doc """
+  Get upto `demand` arguments from given queue (worker) `name`.
 
-    Agent.update(name, fn state -> do_enq(state, args, opts) end)
-  end
-
-  defp do_enq(state, args, opts) do
-    # update and return the new state
-    state =
-      if Keyword.get(opts, :clear, false),
-        do: @state,
-        else: state
-
-    {size, args} = pfx_to_iters(args, 0, [])
-
-    state
-    |> Map.put(:eq, state.eq + size)
-    |> Map.put(:args, state.args ++ args)
-  end
-
+  """
   @spec deq(atom, integer) :: [Job.t()]
   def deq(name, demand) do
     Agent.get_and_update(name, fn state -> do_deq(state, demand) end)
   end
 
-  def do_deq(state, demand) do
-    {new, args} = take_args(state.args, demand)
-    {new, q} = Enum.split(state.q ++ new, demand)
+  @doc """
+  Put arguments in the queue of given (worker) name.
 
-    state =
-      state
-      |> Map.put(:q, q)
-      |> Map.put(:args, args)
-      |> Map.put(:dq, state.dq + Enum.count(new))
+  """
+  @spec enq(atom, [binary]) :: :ok
+  def enq(name, args) do
+    unless Process.whereis(name) do
+      child_spec = %{id: name, start: {Queue, :start_link, [name]}}
+      {:ok, _pid} = DynamicSupervisor.start_child(QueueSupervisor, child_spec)
+    end
 
-    {new, state}
+    Agent.update(name, fn state -> do_enq(state, args) end)
+  end
+
+  @doc """
+  Clear a named queue.
+
+  Used by `Ngauge.CLI.main/1`, so repeated calls from within iex sessions
+  does not skew the statistics.
+
+  """
+  @spec clear(atom) :: :ok
+  def clear(name) do
+    Agent.update(name, fn _state -> @state end)
   end
 
   # Helpers
@@ -90,10 +82,35 @@ defmodule Ngauge.Queue do
   """
   @spec active() :: [atom]
   def active() do
-    DynamicSupervisor.which_children(Ngauge.QueueSupervisor)
-    |> Enum.map(&elem(&1, 1))
-    |> Enum.map(&Process.info(&1, :registered_name))
-    |> Enum.map(&elem(&1, 1))
+    # DynamicSupervisor.which_children(QueueSupervisor)
+    # |> Enum.map(&elem(&1, 1))
+    # |> Enum.map(&Process.info(&1, :registered_name))
+    # |> Enum.map(&elem(&1, 1))
+    DynamicSupervisor.which_children(QueueSupervisor)
+    |> Enum.map(fn {_, pid, _, _} -> Process.info(pid, :registered_name) |> elem(1) end)
+  end
+
+  @spec do_enq(map, [binary]) :: map
+  defp do_enq(state, args) do
+    {size, args} = pfx_to_iters(args, 0, [])
+
+    state
+    |> Map.put(:eq, state.eq + size)
+    |> Map.put(:args, state.args ++ args)
+  end
+
+  @spec do_deq(map, non_neg_integer) :: {[binary], map}
+  def do_deq(state, demand) do
+    {new, args} = take_args(state.args, demand)
+    {new, q} = Enum.split(state.q ++ new, demand)
+
+    state =
+      state
+      |> Map.put(:q, q)
+      |> Map.put(:args, args)
+      |> Map.put(:dq, state.dq + Enum.count(new))
+
+    {new, state}
   end
 
   @spec state(atom | pid | {atom, any} | {:via, atom, any}) :: any
