@@ -6,7 +6,7 @@ defmodule Ngauge.Worker.Ping do
   @behaviour Ngauge.Worker
 
   @spec run(binary) :: map
-  def run(arg) when is_binary(arg) do
+  def run(arg) do
     min = :rand.uniform(100)
     max = min + :rand.uniform(50)
     avg = div(min + max, 2)

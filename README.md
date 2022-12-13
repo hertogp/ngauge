@@ -2,8 +2,8 @@
 
 ## WIP
 
-`ngauge` is a cli tool to take snapshots of various types of connectivity to
-remote hosts by testing them through different scenarios.
+`ngauge` is a cli tool to run various types of connectivity tests to
+remote hosts concurrently.
 
 The idea is to have `X` types of tests, each running `Y` instances concurrently
 to test `Z` destinations.  A destination can be either a hostname, an IP
@@ -24,7 +24,8 @@ def deps do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/ngauge>.
+Documentation can be generated with
+[ExDoc](https://github.com/elixir-lang/ex_doc) and published on
+[HexDocs](https://hexdocs.pm). Once published, the docs can be found at
+<https://hexdocs.pm/ngauge>.
 

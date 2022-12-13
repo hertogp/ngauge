@@ -5,11 +5,11 @@ defmodule Ngauge do
 
   # Supervision tree
 
-                 -----------------Supervisor-------------------------------------
-                /         |           |               \               \          \
-             Options  Progress  TaskSupervisor  QueueSupervisor  CsvSupervisor  Terminator
-                                /      \         /        \         /       \
-                           Task1 ... Task<M>  Queue1 ... Queue<N>  Csv1 ... Csv<N>
+      -----------------Supervisor-------------------------------------
+     /         |           |               \               \          \
+  Options  Progress  TaskSupervisor  QueueSupervisor  CsvSupervisor  Terminator
+                     /      \         /        \         /       \
+                Task1 ... Task<M>  Queue1 ... Queue<N>  Csv1 ... Csv<N>
 
 
 
@@ -52,4 +52,14 @@ defmodule Ngauge do
   [ ] httping retrieves http and/or https header and time last modified
 
   """
+
+  @doc """
+  Just to experiment, delete when done
+  """
+  @spec delme() :: any
+  def delme() do
+    if true,
+      do: nil,
+      else: nil
+  end
 end
