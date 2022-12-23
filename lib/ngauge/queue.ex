@@ -13,9 +13,10 @@ defmodule Ngauge.Queue do
   alias Ngauge.{Job, Queue, QueueSupervisor, Worker}
   alias Pfx
 
+  # [[ STATE ]]
   # args is the list of arguments to be mined given a certain demand
   # dq/eq is the number of enqueued/dequeued arguments
-  # q is overflow queue 
+  # q is overflow queue
   @state %{
     args: [],
     dq: 0,

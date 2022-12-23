@@ -2,7 +2,6 @@ defmodule Ngauge do
   # select TODO's and do :sort! to have completed tasks first.
   @moduledoc """
 
-
   # Supervision tree
 
       -----------------Supervisor-------------------------------------
