@@ -24,19 +24,23 @@ defmodule Ngauge.Queue do
     q: []
   }
 
-  def new(module) do
-    # TODO: register new worker queues so enq/2,3 can check if a queue
-    # is already up or needs to be started.  Reason is that workers may
-    # find new targets they would like to enqueue, either for themselves
-    # of another worker they know of.
-    DynamicSupervisor.start_child(QueueSupervisor, {Queue, module})
-  end
+  # [[ CALLBACKS ]]
 
   @spec start_link(any) :: {:error, any} | {:ok, pid}
   def start_link(name) do
     if Worker.worker?(name),
       do: Agent.start_link(fn -> @state end, name: name),
       else: {:error, {:noworker, name}}
+  end
+
+  # [[ API ]]
+
+  def new(module) do
+    # TODO: register new worker queues so enq/2,3 can check if a queue
+    # is already up or needs to be started.  Reason is that workers may
+    # find new targets they would like to enqueue, either for themselves
+    # of another worker they know of.
+    DynamicSupervisor.start_child(QueueSupervisor, {Queue, module})
   end
 
   @doc """
@@ -74,8 +78,6 @@ defmodule Ngauge.Queue do
     Agent.update(name, fn _state -> @state end)
   end
 
-  # Helpers
-
   @doc """
   Returns a list of running Queues
 
@@ -91,6 +93,19 @@ defmodule Ngauge.Queue do
     |> Enum.map(fn {_, pid, _, _} -> Process.info(pid, :registered_name) |> elem(1) end)
   end
 
+  @spec state(atom | pid | {atom, any} | {:via, atom, any}) :: any
+  def state(name) do
+    Agent.get(name, & &1)
+  end
+
+  @spec progress(atom) :: {integer, integer}
+  def progress(name) do
+    state = Agent.get(name, & &1)
+    {state.dq, state.eq}
+  end
+
+  # [[ HELPERS ]]
+
   @spec do_enq(map, [binary]) :: map
   defp do_enq(state, args) do
     {size, args} = pfx_to_iters(args, 0, [])
@@ -101,7 +116,7 @@ defmodule Ngauge.Queue do
   end
 
   @spec do_deq(map, non_neg_integer) :: {[binary], map}
-  def do_deq(state, demand) do
+  defp do_deq(state, demand) do
     {new, args} = take_args(state.args, demand)
     {new, q} = Enum.split(state.q ++ new, demand)
 
@@ -112,17 +127,6 @@ defmodule Ngauge.Queue do
       |> Map.put(:dq, state.dq + Enum.count(new))
 
     {new, state}
-  end
-
-  @spec state(atom | pid | {atom, any} | {:via, atom, any}) :: any
-  def state(name) do
-    Agent.get(name, & &1)
-  end
-
-  @spec progress(atom) :: {integer, integer}
-  def progress(name) do
-    state = Agent.get(name, & &1)
-    {state.dq, state.eq}
   end
 
   defp pfx_to_iters([], size, acc),
