@@ -1,6 +1,7 @@
 defmodule Ngauge.Progress do
   @moduledoc """
   Shows progress of running workers on screen
+
   """
 
   use Agent
