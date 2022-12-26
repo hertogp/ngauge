@@ -8,6 +8,8 @@ defmodule Ngauge.Progress do
 
   alias Ngauge.{Job, Queue, Worker}
 
+  # [[ ATTRIBUTES ]]
+
   @width min(elem(:io.columns(), 1), 120)
   # @home IO.ANSI.home()
   @home IO.ANSI.cursor(1, 1)
@@ -42,6 +44,7 @@ defmodule Ngauge.Progress do
   @box_vl "\u2524"
   @box_vr "\u251C"
 
+  # [[ STATE ]]
   # state %{
   #   stats => %{job.name => {done, timeout, exit, run}},
   #   jobs  => [jobs_that_are_done]
@@ -55,10 +58,14 @@ defmodule Ngauge.Progress do
     height: 25
   }
 
+  # [[ CALLBACKS ]]
+
   @spec start_link(any) :: {:error, any} | {:ok, pid}
   def start_link(_state) do
     Agent.start_link(fn -> @state end, name: __MODULE__)
   end
+
+  # [[ API ]]
 
   def clear(),
     do: Agent.update(__MODULE__, fn _ -> @state end)
@@ -116,6 +123,8 @@ defmodule Ngauge.Progress do
     state |> to_iolist() |> IO.write()
     state
   end
+
+  # [[ HELPERS ]]
 
   @spec to_iolist(map) :: iolist()
   defp to_iolist(state) do
