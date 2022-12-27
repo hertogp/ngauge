@@ -11,7 +11,7 @@ defmodule Ngauge.Worker.Chain do
   @spec run(binary) :: [binary]
   def run(arg) do
     # special arguments with special (re)actions
-    # donot forget to have the catch all clause at the end
+    # do not forget to have the catch all clause at the end
     case arg do
       "1.1.1.0" -> raise "boom"
       "1.1.1.1" -> Process.sleep(10_000)

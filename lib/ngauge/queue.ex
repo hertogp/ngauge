@@ -44,7 +44,7 @@ defmodule Ngauge.Queue do
   end
 
   @doc """
-  Get upto `demand` arguments from given queue (worker) `name`.
+  Get up to `demand` arguments from given queue (worker) `name`.
 
   """
   @spec deq(atom, integer) :: [Job.t()]

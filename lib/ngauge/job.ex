@@ -7,7 +7,7 @@ defmodule Ngauge.Job do
   :arg      any binary
   :task     a Task when job was started
   :status   show whether the job did `:ok`, `:exit` or had a `:timeout`
-  :result   shows the jobs result when `:ok`, reason for `:exit` or nil when `:timeout` 
+  :result   shows the jobs result when `:ok`, reason for `:exit` or nil when `:timeout`
   :started  starteding time (a point in monotonic_time)
   :stopped  stoppedping time (by worker or runner, also monotonic_time)
 
@@ -140,7 +140,7 @@ defmodule Ngauge.Job do
   @doc """
   Returns a string representation of given `job`.
 
-  Mainly usefull for `Ngauge.Progress`.
+  Mainly useful for `Ngauge.Progress`.
 
   """
   @spec to_str(t()) :: binary
