@@ -1,0 +1,4 @@
+[codespell]
+quiet-level = 7
+skip = deps,_build,logs
+disable-colors = true
