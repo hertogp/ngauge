@@ -22,7 +22,7 @@ defmodule Ngauge.Progress do
 
   @width min(elem(:io.columns(), 1), 120)
   # @home IO.ANSI.home()
-  @home IO.ANSI.cursor(1, 1)
+  # @home IO.ANSI.cursor(1, 1)
   @reset IO.ANSI.reset()
   @clear IO.ANSI.clear()
   @clearline IO.ANSI.clear_line()
@@ -48,8 +48,8 @@ defmodule Ngauge.Progress do
   @box_tr "\u2510"
   @box_bl "\u2514"
   @box_br "\u2518"
-  @box_ml "\u251C"
-  @box_mr "\u2524"
+  # @box_ml "\u251C"
+  # @box_mr "\u2524"
   @box_h "\u2500"
   @box_v "\u2502"
   @box_vl "\u2524"
@@ -153,10 +153,6 @@ defmodule Ngauge.Progress do
     split = Enum.map(header, fn str -> String.duplicate("-", String.length(str)) end)
     results = [header, split] ++ results ++ [split, totals]
 
-    # results = [header, split | results]
-    # results = List.insert_at(results, -1, split)
-    # results = List.insert_at(results, -1, totals)
-
     # get column widths required, adding 2 for spacing
     cw =
       Enum.map(results, fn row ->
@@ -167,7 +163,7 @@ defmodule Ngauge.Progress do
       |> Enum.map(&Enum.max/1)
       |> Enum.map(&(&1 + 2))
 
-    # Write it all out
+    # Write it all out, assumes cursor is just above the progressbars
 
     IO.write("#{c}\n#{c}Summary\n#{c}\n#{c}")
 
