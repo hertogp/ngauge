@@ -5,14 +5,15 @@ defmodule Ngauge.Progress do
   """
 
   # [[ TODO: ]]
-  # [x] add deq/enq (X%)
-  # [ ] list each worker's tests/second
-  # [c] list the ETA as a countdown
-  # [ ] list the job's name, even if anonymous
-  # [ ] turn this into a GenServer
-  # [ ] summary: add a totals line
   # [ ] refactor state so repeat calculations are not necesary
+  # [ ] turn this into a GenServer
+  # [c] in summary, list each worker's tests/second
+  # [c] list the ETA as a countdown
+  # [c] list the job's name, even if anonymous
+  # [x] add deq/enq (X%)
+  # [x] in summary, list the time it took to complete the run
   # [x] list each worker's ok: x, crash: y, timeout: z
+  # [x] summary: add a totals line
 
   use Agent
 
@@ -115,7 +116,7 @@ defmodule Ngauge.Progress do
 
   # update progressbar
   defp update(state, [], _opts) do
-    c = IO.ANSI.clear_line()
+    c = @clearline
 
     # Elixir.Ngauge.Worker.Name -> name
     name = fn mod ->
@@ -164,13 +165,15 @@ defmodule Ngauge.Progress do
       |> Enum.map(&(&1 + 2))
 
     # Write it all out, assumes cursor is just above the progressbars
+    #
+    took = trunc((Job.timestamp() - state.start_time) / 1000)
 
-    IO.write("#{c}\n#{c}Summary\n#{c}\n#{c}")
+    IO.write("#{c}\n#{c}Took #{took} seconds, summary:\n#{c}\n#{c}")
 
     results
     |> Enum.map(&Enum.zip(cw, &1))
     |> Enum.map(&Enum.map(&1, fn {w, s} -> String.pad_leading(s, w) end))
-    |> Enum.intersperse("\n" <> IO.ANSI.clear_line())
+    |> Enum.intersperse("\n" <> @clearline)
     |> IO.write()
 
     IO.write("\n\n")
