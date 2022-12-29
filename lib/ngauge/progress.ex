@@ -5,9 +5,9 @@ defmodule Ngauge.Progress do
   """
 
   # [[ TODO: ]]
-  # [ ] add deq/enq (X%)
+  # [x] add deq/enq (X%)
   # [ ] list each worker's tests/second
-  # [ ] list the ETA as a countdown
+  # [c] list the ETA as a countdown
   # [ ] list the job's name, even if anonymous
   # [ ] turn this into a GenServer
   # [ ] summary: add a totals line
@@ -135,7 +135,25 @@ defmodule Ngauge.Progress do
         [name.(k), "#{done}", "#{timeout}", "#{exit}", "#{total}", "#{perc}%"]
       end)
 
-    results = [["WORKER", "DONE", "TIMEOUT", "EXIT", "TOTAL", "SUCCESS"] | results]
+    totals =
+      Enum.reduce(state.stats, [0, 0, 0, 0], fn {_k, v}, [a, b, c, d] ->
+        {done, timeout, exit, _run} = v
+        [a + done, b + timeout, c + exit, d + done + timeout + exit]
+      end)
+
+    p = perc(List.first(totals), List.last(totals))
+
+    totals =
+      totals
+      |> Enum.map(&"#{&1}")
+      |> List.insert_at(0, "totals")
+      |> List.insert_at(-1, "#{p}%")
+
+    header = ["WORKER", "DONE", "TIMEOUT", "EXIT", "TOTAL", "SUCCESS"]
+    split = Enum.map(header, fn str -> String.duplicate("-", String.length(str)) end)
+    results = [header | results]
+    results = List.insert_at(results, -1, split)
+    results = List.insert_at(results, -1, totals)
 
     # get column widths required, adding 2 for spacing
     cw =
