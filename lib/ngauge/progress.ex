@@ -151,9 +151,11 @@ defmodule Ngauge.Progress do
 
     header = ["WORKER", "DONE", "TIMEOUT", "EXIT", "TOTAL", "SUCCESS"]
     split = Enum.map(header, fn str -> String.duplicate("-", String.length(str)) end)
-    results = [header | results]
-    results = List.insert_at(results, -1, split)
-    results = List.insert_at(results, -1, totals)
+    results = [header, split] ++ results ++ [split, totals]
+
+    # results = [header, split | results]
+    # results = List.insert_at(results, -1, split)
+    # results = List.insert_at(results, -1, totals)
 
     # get column widths required, adding 2 for spacing
     cw =
@@ -173,7 +175,7 @@ defmodule Ngauge.Progress do
     |> Enum.map(&Enum.zip(cw, &1))
     |> Enum.map(&Enum.map(&1, fn {w, s} -> String.pad_leading(s, w) end))
     |> Enum.intersperse("\n" <> IO.ANSI.clear_line())
-    |> Enum.map(fn row -> IO.write(row) end)
+    |> IO.write()
 
     IO.write("\n\n")
 
