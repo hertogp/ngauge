@@ -45,6 +45,7 @@ defmodule Ngauge.Runner do
     Csv.active()
     |> Enum.map(&Csv.stop/1)
 
+    Progress.update(jobs, [])
     :ok
   end
 

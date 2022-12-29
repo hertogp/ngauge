@@ -21,24 +21,21 @@ defmodule Ngauge do
   [x] workers are dynamically loaded when tests are enqueued for them
   [x] progress just dumps an iolist to the screen
   [x] progress does not keep N jobs but their string representation instead
-  [ ] turn Queue into a GenServer like Csv
-  [ ] add cli switches:
-      [ ] take max window height from cli, default to 20 (total)
-      [ ] take max window width from cli, default to 80 (total)
+  [ ] turn Queue into a GenServer (like Csv)
   [x] add CsvSupervisor so Runner can log worker results to csv files
       [x] start a writer for a worker
       [x] stop a writer for a worker
       [x] use delayed_write with 64KB buffer and 30s delay
           see https://www.erlang.org/doc/man/file.html#open-2
           - requires raw mode, which needs :file.write/2 (doesn't work?)
-  [ ] add Terminator that will clear the Queue's and drain the workers & csv writers
+  [ ] add Terminator that will clear the Queue's and drain the active workers & csv writers
   [x] each run via Ngauge.CLI.main must have a tstamp
   [x] each worker supports:
       [x] `run/1` to test a single destination
       [x] `to_string/1` format a job's result as a string
       [x] `to_csv/1` format a job's result as lines of csv field values
       [x] `csv_headers/0` in case a new file is started
-  [ ] add Logger with a file backend (no console output)
+  [ ] add Logger with a file backend for csv
 
   # Real workers
   [ ] chain pulls the cert chain off of a host or IP address

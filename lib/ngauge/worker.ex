@@ -1,15 +1,17 @@
 defmodule Ngauge.Worker do
   @moduledoc """
-  Utility functions for workers
+  Behaviour specification and Utility functions for workers
+
   """
 
-  # Worker Behaviour
+  # [[ BEHAVIOUR ]]
+
   @callback run(arg :: binary) :: any
   @callback to_str(arg :: any) :: binary
   @callback to_csv(arg :: any) :: [[binary]]
   @callback csv_headers() :: [binary]
 
-  # Utility functions
+  # [[ UTILITIES for workers ]]
 
   @doc """
   Returns lowercased string of the last label in the `worker`'s module.

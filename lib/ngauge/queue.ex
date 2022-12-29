@@ -8,6 +8,11 @@ defmodule Ngauge.Queue do
 
   """
 
+  # [[ TODO: ]]
+  # [ ] turn this module into a GenServer
+  # [ ] ignore repeat enqueue'ing of a targe during a run
+  # [x] add progress/0 which gives the overall counts for deq/enq
+
   use Agent
 
   alias Ngauge.{Job, Queue, QueueSupervisor, Worker}
@@ -85,10 +90,6 @@ defmodule Ngauge.Queue do
   """
   @spec active() :: [atom]
   def active() do
-    # DynamicSupervisor.which_children(QueueSupervisor)
-    # |> Enum.map(&elem(&1, 1))
-    # |> Enum.map(&Process.info(&1, :registered_name))
-    # |> Enum.map(&elem(&1, 1))
     DynamicSupervisor.which_children(QueueSupervisor)
     |> Enum.map(fn {_, pid, _, _} -> Process.info(pid, :registered_name) |> elem(1) end)
   end
@@ -98,6 +99,21 @@ defmodule Ngauge.Queue do
     Agent.get(name, & &1)
   end
 
+  @doc """
+  Return the dequeued/enqueued counts for all workers.
+
+  """
+  @spec progress() :: {integer, integer}
+  def progress() do
+    Queue.active()
+    |> Enum.map(&Queue.progress/1)
+    |> Enum.reduce({0, 0}, fn {d, e}, {td, te} -> {td + d, te + e} end)
+  end
+
+  @doc """
+  Returns the dequeued/enqueued items for a worker
+
+  """
   @spec progress(atom) :: {integer, integer}
   def progress(name) do
     state = Agent.get(name, & &1)

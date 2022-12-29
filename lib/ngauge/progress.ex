@@ -4,6 +4,16 @@ defmodule Ngauge.Progress do
 
   """
 
+  # [[ TODO: ]]
+  # [ ] add deq/enq (X%)
+  # [ ] list each worker's tests/second
+  # [ ] list the ETA as a countdown
+  # [ ] list the job's name, even if anonymous
+  # [ ] turn this into a GenServer
+  # [ ] summary: add a totals line
+  # [ ] refactor state so repeat calculations are not necesary
+  # [x] list each worker's ok: x, crash: y, timeout: z
+
   use Agent
 
   alias Ngauge.{Job, Queue, Worker}
@@ -15,6 +25,7 @@ defmodule Ngauge.Progress do
   @home IO.ANSI.cursor(1, 1)
   @reset IO.ANSI.reset()
   @clear IO.ANSI.clear()
+  @clearline IO.ANSI.clear_line()
   # @bright IO.ANSI.bright()
   @normal IO.ANSI.normal()
   @green IO.ANSI.green()
@@ -56,19 +67,26 @@ defmodule Ngauge.Progress do
     jobs: [],
     width: 100,
     height: 25
+    # start_time is added by start_link/1 and clear/0
   }
 
   # [[ CALLBACKS ]]
 
   @spec start_link(any) :: {:error, any} | {:ok, pid}
   def start_link(_state) do
-    Agent.start_link(fn -> @state end, name: __MODULE__)
+    state =
+      Map.put(@state, :start_time, Job.timestamp())
+      |> IO.inspect(label: :state)
+
+    Agent.start_link(fn -> state end, name: __MODULE__)
   end
 
   # [[ API ]]
 
-  def clear(),
-    do: Agent.update(__MODULE__, fn _ -> @state end)
+  def clear() do
+    state = Map.put(@state, :start_time, Job.timestamp())
+    Agent.update(__MODULE__, fn _ -> state end)
+  end
 
   @spec clear_screen() :: :ok
   def clear_screen() do
@@ -81,8 +99,11 @@ defmodule Ngauge.Progress do
   @doc """
   Given a list of jobs that are running or are done, update the worker statistics.
 
-  The should be comprised of the currently running jobs and those that were
+  The list should be comprised of the currently running jobs and those that were
   completed during the last yield.
+
+  An empty list signals that all work is finished and the worker statistics are
+  printed instead.
 
   """
   @spec update([Job.t()], Keyword.t()) :: :ok
@@ -90,28 +111,74 @@ defmodule Ngauge.Progress do
     Agent.update(__MODULE__, fn state -> update(state, jobs, opts) end)
   end
 
+  # [[ HELPERS ]]
+
+  # update progressbar
+  defp update(state, [], _opts) do
+    c = IO.ANSI.clear_line()
+
+    # Elixir.Ngauge.Worker.Name -> name
+    name = fn mod ->
+      mod
+      |> to_string()
+      |> String.split(".")
+      |> List.last()
+      |> String.downcase()
+    end
+
+    # get results as columns where stats[k] -> {#done, #timeout, #exit, #run}
+    results =
+      Enum.map(state.stats, fn {k, v} ->
+        {done, timeout, exit, _run} = v
+        total = done + timeout + exit
+        perc = trunc(100 * done / total)
+        [name.(k), "#{done}", "#{timeout}", "#{exit}", "#{total}", "#{perc}%"]
+      end)
+
+    results = [["WORKER", "DONE", "TIMEOUT", "EXIT", "TOTAL", "SUCCESS"] | results]
+
+    # get column widths required, adding 2 for spacing
+    cw =
+      Enum.map(results, fn row ->
+        Enum.map(row, fn col -> String.length(col) end)
+      end)
+      |> Enum.zip()
+      |> Enum.map(&Tuple.to_list/1)
+      |> Enum.map(&Enum.max/1)
+      |> Enum.map(&(&1 + 2))
+
+    # Write it all out
+
+    IO.write("#{c}\n#{c}Summary\n#{c}\n#{c}")
+
+    results
+    |> Enum.map(&Enum.zip(cw, &1))
+    |> Enum.map(&Enum.map(&1, fn {w, s} -> String.pad_leading(s, w) end))
+    |> Enum.intersperse("\n" <> IO.ANSI.clear_line())
+    |> Enum.map(fn row -> IO.write(row) end)
+
+    IO.write("\n\n")
+
+    state
+  end
+
   defp update(state, jobs, opts) do
+    # if requested, start afresh
     state =
       if Keyword.get(opts, :clear, false),
-        do: @state,
+        do: Map.put(@state, :start_time, Job.timestamp()),
         else: state
 
-    # reset the running count first
+    # running count is not cumulative, so reset those
+    # stats[worker] -> {done, timeout, exit (crash), running}
     stats =
       state.stats
       |> Enum.reduce(%{}, fn {k, {d, t, e, _r}}, acc -> Map.put(acc, k, {d, t, e, 0}) end)
 
+    # update stats based on list of jobs done/crashed/timedout/running
     stats = Enum.reduce(jobs, stats, &update_stats/2)
 
-    max = elem(:io.rows(), 1) - 10
-
-    width = Map.get(state, :width, @width)
-
-    done =
-      Enum.filter(jobs, fn job -> job.status != :run end)
-      |> Enum.map(&jobline(&1, width))
-      |> Kernel.++(state.jobs)
-      |> Enum.take(max)
+    done = Enum.filter(jobs, fn job -> job.status != :run end)
 
     state =
       state
@@ -121,50 +188,72 @@ defmodule Ngauge.Progress do
 
     # update the screen
     state |> to_iolist() |> IO.write()
-    state
+    # don't keep printing the same stuff
+    Map.put(state, :jobs, [])
   end
-
-  # [[ HELPERS ]]
 
   @spec to_iolist(map) :: iolist()
   defp to_iolist(state) do
-    ["\n"]
+    # progress bar at bottom, output above
+    {:ok, last_row} = :io.rows()
+    num_workers = Map.keys(state.stats) |> Enum.count()
+
+    [IO.ANSI.cursor(-3 + last_row - num_workers, 1)]
     |> bottom_line(state)
-    |> joblines(state)
-    |> separator(state)
     |> bars(state)
     |> top_line(state)
+    |> joblines(state)
+    |> Enum.intersperse("\n")
+  end
+
+  defp perc(x, y) do
+    trunc(100 * x / y)
   end
 
   @spec top_line(any, map) :: nonempty_maybe_improper_list
   defp top_line(acc, state) do
-    kids = Task.Supervisor.children(Ngauge.TaskSupervisor) |> Enum.count()
+    active = Task.Supervisor.children(Ngauge.TaskSupervisor) |> Enum.count()
+
     name = " nGauge "
-    kids = String.pad_leading(" #{kids}", 4, [@box_h]) <> " Running "
-    pad = state.width - String.length(name) - String.length(kids) - 6
+    kids = String.pad_leading(" #{active}", 4, [@box_h]) <> " Active "
+    time = trunc((Job.timestamp() - state.start_time) / 1000)
+    runtime = " Time #{time} [s] "
+
+    {deq, enq} = Queue.progress()
+    overall = " #{deq - active}/#{enq} #{perc(deq - active, enq)}% "
+
+    pad =
+      state.width - String.length(name) - String.length(kids) - String.length(runtime) -
+        String.length(overall) - 10
 
     [
-      # @clear,
-      @home,
-      @reset,
-      @box_tl,
-      @box_h,
-      @box_vl,
-      # @bright,
-      @white,
-      name,
-      @reset,
-      @box_vr,
-      @box_h,
-      kids,
-      repeat(@box_h, pad),
-      @box_tr,
-      "\n" | acc
+      [
+        @clearline,
+        "\n",
+        @reset,
+        @box_tl,
+        @box_h,
+        @box_vl,
+        # @bright,
+        @white,
+        name,
+        @reset,
+        @box_vr,
+        @box_h,
+        kids,
+        repeat(@box_h, 2),
+        runtime,
+        repeat(@box_h, 2),
+        overall,
+        repeat(@box_h, pad),
+        @box_tr
+      ]
+      | acc
     ]
   end
 
   defp bottom_line(acc, state),
-    do: [@reset, @box_bl, repeat(@box_h, state.width - 2, []), @box_br | acc]
+    do: [[@reset, @box_bl, repeat(@box_h, state.width - 2, []), @box_br] | acc]
 
   defp bars(acc, state) do
     # calculate the longest name in order to align them with padding in bar/4
@@ -172,10 +261,11 @@ defmodule Ngauge.Progress do
     workers = Map.keys(state.stats) |> Enum.sort() |> Enum.reverse()
     names = Enum.map(workers, &Worker.name/1)
     len = Enum.reduce(names, 0, &max(String.length(&1), &2))
-    Enum.reduce(workers, acc, fn worker, acc -> bar(acc, worker, state, len) end)
+    # Enum.reduce(workers, acc, fn worker, acc -> bar(acc, worker, state, len) end)
+    Enum.reduce(workers, acc, fn worker, acc -> [bar(worker, state, len) | acc] end)
   end
 
-  defp bar(acc, worker, state, len) do
+  defp bar(worker, state, len) do
     {done, timeout, exit, run} = Map.get(state.stats, worker, {0, 0, 0, 0})
 
     name =
@@ -209,34 +299,14 @@ defmodule Ngauge.Progress do
       repeat(@bar_off, off),
       @reset,
       perc,
-      @box_v,
-      "\n" | acc
+      @box_v
     ]
   end
 
-  defp separator(acc, state) do
-    width = Map.get(state, :width, @width)
-    [@reset, @box_ml, repeat(@box_h, width - 2), @box_mr, "\n" | acc]
-  end
-
   defp joblines(acc, state) do
-    Enum.reduce(state.jobs, acc, fn jobline, acc ->
-      [@box_v, " ", jobline, " ", @box_v, "\n" | acc]
+    Enum.reduce(state.jobs, acc, fn job, acc ->
+      [[@clearline, " ", @colors[job.status] || @normal, Job.to_str(job), @reset] | acc]
     end)
-  end
-
-  defp jobline(job, max) do
-    # return a single string padded or limited to max - 4 chars since it
-    # will be wrapped in "| " and " |" by joblines.
-    str = Job.to_str(job)
-    pad = max - String.length(str) - 4
-
-    str =
-      if pad < 0,
-        do: String.slice(str, 0..(max - 5)),
-        else: [str, repeat(" ", pad)]
-
-    [Map.get(@colors, job.status, @normal), str, @reset]
   end
 
   defp repeat(ch, max) when max > 0,

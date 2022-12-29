@@ -142,33 +142,52 @@ defmodule Ngauge.Job do
 
   Mainly useful for `Ngauge.Progress`.
 
+    Uses job/worker module's `:to_str/1` if available for the job's result part
+    of the string.
+
   """
   @spec to_str(t()) :: binary
-  def to_str(%__MODULE__{status: :done} = job) do
-    result =
-      case function_exported?(job.mod, :to_str, 1) do
-        true -> apply(job.mod, :to_str, [job.result])
-        _ -> "missing to_str #{inspect(job.result)}"
-      end
-
-    # worker = Module.split(job.mod) |> List.last()
-    "#{job.name}(#{job.arg}) #{job.status} #{age(job)}ms #{result}"
-  end
-
-  def to_str(%__MODULE__{status: :exit} = job) do
-    err =
-      case elem(job.result, 0) do
-        x when is_exception(x) -> Exception.message(x)
-        _ -> "#{inspect(job.result)}"
-      end
-
-    "#{job.name}(#{job.arg}) #{job.status} #{age(job)}ms #{err}"
-  end
-
-  # in case of :timeout, :run, there are no results
   def to_str(job) do
-    "#{job.name}(#{job.arg}) #{job.status} #{age(job)} ms"
+    # result formatting differs per job status.
+    result = to_str(job.status, job)
+    status = String.pad_trailing("#{job.status}", 7)
+    "#{status} > #{job.name}(#{job.arg}) #{age(job)}ms #{result}"
   end
+
+  defp to_str(:done, job) do
+    case function_exported?(job.mod, :to_str, 1) do
+      true -> apply(job.mod, :to_str, [job.result])
+      _ -> "missing to_str #{inspect(job.result)}"
+    end
+  end
+
+  defp to_str(:exit, job) do
+    # Notes:
+    # - result is always a tuple
+    # - 0th element may be an exception, or
+    # - 0th element may be an atom in which case it is followed by a list of tuples
+    case elem(job.result, 0) do
+      x when is_exception(x) ->
+        Exception.message(x)
+
+      x when is_atom(x) ->
+        # only get the first bits of the error information
+        result =
+          job.result
+          |> elem(1)
+          |> List.first()
+          |> Tuple.to_list()
+          |> List.flatten()
+
+        "#{x} - #{inspect(result)}"
+
+      _ ->
+        "#{inspect(job.result)}"
+    end
+  end
+
+  defp to_str(_, _),
+    do: ""
 
   @doc """
   Returns a list of csv-lines representing given `job`'s results.
@@ -208,6 +227,6 @@ defmodule Ngauge.Job do
     |> Enum.intersperse(",")
   end
 
-  defp timestamp,
+  def timestamp,
     do: System.monotonic_time(:millisecond)
 end
