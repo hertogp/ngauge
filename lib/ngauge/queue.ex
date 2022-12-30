@@ -11,6 +11,7 @@ defmodule Ngauge.Queue do
   """
 
   # [[ TODO: ]]
+  # [ ] add terminate/1 for proper shutdown
   # [ ] ignore repeat enqueue'ing of a target during a run
   # [x] add progress/0 which gives the overall counts for deq/enq
   # [x] turn this module into a GenServer

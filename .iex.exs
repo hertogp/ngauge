@@ -1,14 +1,20 @@
-alias Ngauge.Runner
-alias Ngauge.Targets
+# usage: Ngauge.CLI.main(cli_args<x>)
+cli_args1 = ["1.1.1.0/29", "-w", "chain"]
 
-targets = [
-  "hostname1.tld",
-  "1.1.1.0/30",
-  "hostname2.tld",
-  "2.2.2.0/28",
-  "hostname3.tld",
-  "3.3.3.0/30"
+cli_args2 = [
+  "1.1.1.0/25",
+  "-w",
+  "chain",
+  "-w",
+  "ping",
+  "-w",
+  "pong",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5"
 ]
 
-# usage: Ngauge.main(cli_args)
-cli_args = ["1.1.1.0/30", "-w", "chain"]
+r1 = fn -> Ngauge.CLI.main(cli_args1) end
+r2 = fn -> Ngauge.CLI.main(cli_args2) end

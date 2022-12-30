@@ -6,7 +6,7 @@ defmodule Ngauge.Progress do
 
   # [[ TODO: ]]
   # [ ] refactor state so repeat calculations are not necesary
-  # [ ] turn this into a GenServer
+  # [c] turn this into a GenServer
   # [c] in summary, list each worker's tests/second
   # [c] list the ETA as a countdown
   # [c] list the job's name, even if anonymous
@@ -57,32 +57,28 @@ defmodule Ngauge.Progress do
   @box_vr "\u251C"
 
   # [[ STATE ]]
-  # state %{
-  #   stats => %{job.name => {done, timeout, exit, run}},
-  #   jobs  => [jobs_that_are_done]
-  #   width => width of progress screen
-  #   height => height of progress screen
-  # }
+
   @state %{
+    # stats[module] -> {done, timeout, exit, run}
     stats: %{},
+    # list of jobs that are not :run'ing
     jobs: [],
+    # width for progress bar(s)
     width: 100,
-    height: 25
-    # start_time is added by start_link/1 and clear/0
+    # start_time must be set by start_link/1 and clear/0
+    start_time: nil
   }
 
-  # [[ CALLBACKS ]]
+  # [[ STARTUP API ]]
 
   @spec start_link(any) :: {:error, any} | {:ok, pid}
   def start_link(_state) do
-    state =
-      Map.put(@state, :start_time, Job.timestamp())
-      |> IO.inspect(label: :state)
+    state = Map.put(@state, :start_time, Job.timestamp())
 
     Agent.start_link(fn -> state end, name: __MODULE__)
   end
 
-  # [[ API ]]
+  # [[ CLIENT API ]]
 
   def clear() do
     state = Map.put(@state, :start_time, Job.timestamp())
@@ -114,18 +110,14 @@ defmodule Ngauge.Progress do
 
   # [[ HELPERS ]]
 
-  # update progressbar
+  # [[ update progressbar ]]
+
+  # final result (empty job list)
   defp update(state, [], _opts) do
     c = @clearline
 
     # Elixir.Ngauge.Worker.Name -> name
-    name = fn mod ->
-      mod
-      |> to_string()
-      |> String.split(".")
-      |> List.last()
-      |> String.downcase()
-    end
+    name = fn worker -> Worker.name(worker) |> String.downcase() end
 
     # get results as columns where stats[k] -> {#done, #timeout, #exit, #run}
     results =
@@ -181,6 +173,7 @@ defmodule Ngauge.Progress do
     state
   end
 
+  # intermediate update based on a list of jobs yielded
   defp update(state, jobs, opts) do
     # if requested, start afresh
     state =
@@ -217,6 +210,8 @@ defmodule Ngauge.Progress do
     {:ok, last_row} = :io.rows()
     num_workers = Map.keys(state.stats) |> Enum.count()
 
+    # since we prepend a list for each line of output, go in reverse order
+    # cursor ends up just above the status bars, on an empty line
     [IO.ANSI.cursor(-3 + last_row - num_workers, 1)]
     |> bottom_line(state)
     |> bars(state)
@@ -229,7 +224,7 @@ defmodule Ngauge.Progress do
     trunc(100 * x / y)
   end
 
-  @spec top_line(any, map) :: nonempty_maybe_improper_list
+  @spec top_line(list, map) :: nonempty_maybe_improper_list
   defp top_line(acc, state) do
     active = Enum.reduce(state.stats, 0, fn {_, {_, _, _, r}}, count -> count + r end)
 
@@ -280,7 +275,6 @@ defmodule Ngauge.Progress do
     workers = Map.keys(state.stats) |> Enum.sort() |> Enum.reverse()
     names = Enum.map(workers, &Worker.name/1)
     len = Enum.reduce(names, 0, &max(String.length(&1), &2))
-    # Enum.reduce(workers, acc, fn worker, acc -> bar(acc, worker, state, len) end)
     Enum.reduce(workers, acc, fn worker, acc -> [bar(worker, state, len) | acc] end)
   end
 
@@ -339,6 +333,8 @@ defmodule Ngauge.Progress do
 
   defp repeat(ch, n, acc),
     do: repeat(ch, n - 1, [ch | acc])
+
+  # [[ stats helpers ]]
 
   defp update_stats(job, stats) do
     {done, timeout, exit, run} = Map.get(stats, job.mod, {0, 0, 0, 0})
