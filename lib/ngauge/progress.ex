@@ -231,12 +231,7 @@ defmodule Ngauge.Progress do
 
   @spec top_line(any, map) :: nonempty_maybe_improper_list
   defp top_line(acc, state) do
-    # TODO: count the number of jobs with status :run, since asking the
-    # TaskSupervisor directly, some jobs may have terminated already which
-    # we'll see only on the next update cycle.  This way, the total in the
-    # topline sometimes differs from the total running counts for each worker
-    # in their bar(s).
-    active = Task.Supervisor.children(Ngauge.TaskSupervisor) |> Enum.count()
+    active = Enum.reduce(state.stats, 0, fn {_, {_, _, _, r}}, count -> count + r end)
 
     name = " nGauge "
     kids = String.pad_leading(" #{active}", 4, [@box_h]) <> " Active "
