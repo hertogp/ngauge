@@ -1,6 +1,6 @@
 defmodule Ngauge.Worker.Pong do
   @moduledoc """
-  A fake ping worker (for now)
+  A fake pong worker
   """
 
   @behaviour Ngauge.Worker

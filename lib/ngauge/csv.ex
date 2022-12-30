@@ -3,34 +3,26 @@ defmodule Ngauge.Csv do
 
   alias Ngauge.{Worker, CsvRegistry, CsvSupervisor, Job}
 
-  # Client API
+  # [[ STARTUP API ]]
+
+  @spec via(module) :: {:via, module, {module, name: module}}
+  defp via(worker),
+    do: {:via, Registry, {CsvRegistry, name: worker}}
 
   @doc """
-  Lists the active CSV-writers by name.
+  Returns a child specification that:
+  - ensures a child is only restarted if it terminated abnormally
+  - allows children 20 sec to clean up (i.e. close the file)
+  - names this module's `:start_link` to start the process
+  - sets the `:id` to the worker module (1 per worker type)
   """
-  @spec active() :: [atom]
-  def active() do
-    # - CsvRegistry has unique keys and registers csv-writers by worker module name
-    CsvSupervisor
-    |> DynamicSupervisor.which_children()
-    |> Enum.map(fn {_, pid, _, _} -> Registry.keys(CsvRegistry, pid) end)
-    |> List.flatten()
-    |> Enum.map(&elem(&1, 1))
-    |> Enum.sort()
-  end
-
-  @doc """
-  Start a CSV-writer process for given worker module
-
-  """
-  @spec start(atom) :: :ignore | {:error, any} | {:ok, pid, any}
-  def start(worker) do
-    # starting through DynamicSupervisor & CsvSupervisor will trigger calls:
-    # -> child_spec, start_link and init
-    case GenServer.whereis(via(worker)) do
-      nil -> DynamicSupervisor.start_child(CsvSupervisor, {__MODULE__, worker})
-      pid -> {:ok, pid}
-    end
+  def child_spec(worker) do
+    %{
+      id: worker,
+      start: {__MODULE__, :start_link, [worker]},
+      restart: :transient,
+      shutdown: 20_000
+    }
   end
 
   @spec start_link(module) :: :ignore | {:error, module} | {:ok, pid}
@@ -39,6 +31,31 @@ defmodule Ngauge.Csv do
       GenServer.start_link(__MODULE__, worker, name: via(worker))
     else
       {:error, {:noworker, worker}}
+    end
+  end
+
+  @impl true
+  @spec init(module) :: {:ok, nil, {:continue, module}}
+  def init(worker) do
+    # trapping exits => the {:EXIT, _} message is handled by GenServer's handle_info
+    # will call our terminate *iff* we're trapping exits.
+    Process.flag(:trap_exit, true)
+    {:ok, nil, {:continue, worker}}
+  end
+
+  # [[ CLIENT API ]]
+
+  @doc """
+  Start a CSV-writer process for given worker module
+
+  """
+  @spec start(module) :: :ignore | {:error, any} | {:ok, pid, any}
+  def start(worker) do
+    # starting through DynamicSupervisor & CsvSupervisor will trigger calls:
+    # -> child_spec, start_link and init
+    case GenServer.whereis(via(worker)) do
+      nil -> DynamicSupervisor.start_child(CsvSupervisor, {__MODULE__, worker})
+      pid -> {:ok, pid}
     end
   end
 
@@ -60,6 +77,20 @@ defmodule Ngauge.Csv do
   end
 
   @doc """
+  Lists the active CSV-writers by name.
+  """
+  @spec active() :: [atom]
+  def active() do
+    # - CsvRegistry has unique keys and registers csv-writers by worker module name
+    CsvSupervisor
+    |> DynamicSupervisor.which_children()
+    |> Enum.map(fn {_, pid, _, _} -> Registry.keys(CsvRegistry, pid) end)
+    |> List.flatten()
+    |> Enum.map(&elem(&1, 1))
+    |> Enum.sort()
+  end
+
+  @doc """
   Write to csv-file for given `job`.
 
   """
@@ -75,11 +106,7 @@ defmodule Ngauge.Csv do
     GenServer.cast(name, {:write, job})
   end
 
-  @spec via(module) :: {:via, module, {module, name: module}}
-  def via(worker),
-    do: {:via, Registry, {CsvRegistry, name: worker}}
-
-  # GenServer Callbacks
+  # [[ GENSERVER Callbacks ]]]
 
   @impl true
   def handle_cast({:write, job}, {_path, fp} = state) do
@@ -113,15 +140,6 @@ defmodule Ngauge.Csv do
   end
 
   @impl true
-  @spec init(module) :: {:ok, nil, {:continue, module}}
-  def init(worker) do
-    # trapping exits => the {:EXIT, _} message is handled by GenServer's handle_info
-    # will call our terminate *iff* we're trapping exits.
-    Process.flag(:trap_exit, true)
-    {:ok, nil, {:continue, worker}}
-  end
-
-  @impl true
   @spec terminate(any, any) :: :ok
   def terminate(_reason, {_fpath, fp}) do
     # cleanup: maybe add empty line and close fp
@@ -131,19 +149,5 @@ defmodule Ngauge.Csv do
 
   # DynamicSupervisor API
 
-  @doc """
-  Returns a child specification that:
-  - ensures a child is only restarted if it terminated abnormally
-  - allows children 20 sec to clean up (i.e. close the file)
-  - names this module's `:start_link` to start the process
-  - sets the `:id` to the worker module (1 per worker type)
-  """
-  def child_spec(worker) do
-    %{
-      id: worker,
-      start: {__MODULE__, :start_link, [worker]},
-      restart: :transient,
-      shutdown: 20_000
-    }
-  end
+  # [[ HELPERS ]]
 end

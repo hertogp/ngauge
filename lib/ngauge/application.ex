@@ -11,9 +11,9 @@ defmodule Ngauge.Application do
       Ngauge.Options,
       Ngauge.Progress,
       {Registry, keys: :unique, name: Ngauge.CsvRegistry},
+      {Registry, keys: :unique, name: Ngauge.QueRegistry},
       {DynamicSupervisor, name: Ngauge.CsvSupervisor, strategy: :one_for_one},
-      {Registry, keys: :unique, name: Ngauge.QueueRegistry},
-      {DynamicSupervisor, name: Ngauge.QueueSupervisor, strategy: :one_for_one},
+      {DynamicSupervisor, name: Ngauge.QueSupervisor, strategy: :one_for_one},
       {Task.Supervisor, name: Ngauge.TaskSupervisor}
     ]
 
