@@ -8,13 +8,13 @@ defmodule Ngauge.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {Task.Supervisor, name: Ngauge.TaskSupervisor},
       Ngauge.Options,
       Ngauge.Progress,
-      {Registry, keys: :unique, name: Ngauge.CsvRegistry},
       {Registry, keys: :unique, name: Ngauge.QueRegistry},
-      {DynamicSupervisor, name: Ngauge.CsvSupervisor, strategy: :one_for_one},
+      {Registry, keys: :unique, name: Ngauge.CsvRegistry},
       {DynamicSupervisor, name: Ngauge.QueSupervisor, strategy: :one_for_one},
-      {Task.Supervisor, name: Ngauge.TaskSupervisor}
+      {DynamicSupervisor, name: Ngauge.CsvSupervisor, strategy: :one_for_one}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

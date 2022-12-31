@@ -6,6 +6,7 @@ defmodule Ngauge.Progress do
 
   # [[ TODO: ]]
   # [ ] refactor state so repeat calculations are not necesary
+  # [ ] make sure to not overwrite any previous text on the screen
   # [c] turn this into a GenServer
   # [c] in summary, list each worker's tests/second
   # [c] list the ETA as a countdown
@@ -80,15 +81,15 @@ defmodule Ngauge.Progress do
 
   # [[ CLIENT API ]]
 
-  def clear() do
-    state = Map.put(@state, :start_time, Job.timestamp())
-    Agent.update(__MODULE__, fn _ -> state end)
-  end
-
-  @spec clear_screen() :: :ok
-  def clear_screen() do
-    IO.write(@clear)
-  end
+  # def clear() do
+  #   state = Map.put(@state, :start_time, Job.timestamp())
+  #   Agent.update(__MODULE__, fn _ -> state end)
+  # end
+  #
+  # @spec clear_screen() :: :ok
+  # def clear_screen() do
+  #   IO.write(@clear)
+  # end
 
   def state(),
     do: Agent.get(__MODULE__, & &1)
@@ -124,7 +125,7 @@ defmodule Ngauge.Progress do
       Enum.map(state.stats, fn {k, v} ->
         {done, timeout, exit, _run} = v
         total = done + timeout + exit
-        perc = trunc(100 * done / total)
+        perc = perc(done, total)
         [name.(k), "#{done}", "#{timeout}", "#{exit}", "#{total}", "#{perc}%"]
       end)
 
@@ -190,6 +191,7 @@ defmodule Ngauge.Progress do
     # update stats based on list of jobs done/crashed/timedout/running
     stats = Enum.reduce(jobs, stats, &update_stats/2)
 
+    # jobs that are no longer running, will have their results printed
     done = Enum.filter(jobs, fn job -> job.status != :run end)
 
     state =
@@ -200,7 +202,7 @@ defmodule Ngauge.Progress do
 
     # update the screen
     state |> to_iolist() |> IO.write()
-    # don't keep printing the same stuff
+    # print job results only once
     Map.put(state, :jobs, [])
   end
 
@@ -209,17 +211,20 @@ defmodule Ngauge.Progress do
     # progress bar at bottom, output above
     {:ok, last_row} = :io.rows()
     num_workers = Map.keys(state.stats) |> Enum.count()
+    start = [IO.ANSI.cursor(-3 + last_row - num_workers, 1)]
 
     # since we prepend a list for each line of output, go in reverse order
     # cursor ends up just above the status bars, on an empty line
-    [IO.ANSI.cursor(-3 + last_row - num_workers, 1)]
+    start
     |> bottom_line(state)
     |> bars(state)
     |> top_line(state)
     |> joblines(state)
     |> Enum.intersperse("\n")
+    |> then(fn lines -> [start | lines] end)
   end
 
+  @spec perc(integer, integer) :: integer
   defp perc(x, y) do
     trunc(100 * x / y)
   end
@@ -270,8 +275,9 @@ defmodule Ngauge.Progress do
     do: [[@reset, @box_bl, repeat(@box_h, state.width - 2, []), @box_br] | acc]
 
   defp bars(acc, state) do
-    # calculate the longest name in order to align them with padding in bar/4
+    # calculate the longest name in order to align them with padding in bar/3
     # add bars always in same, alphabetical order by reducing a sorted worker list
+    # TODO: also check max number of running jobs so it can be padded too
     workers = Map.keys(state.stats) |> Enum.sort() |> Enum.reverse()
     names = Enum.map(workers, &Worker.name/1)
     len = Enum.reduce(names, 0, &max(String.length(&1), &2))
@@ -281,6 +287,7 @@ defmodule Ngauge.Progress do
   defp bar(worker, state, len) do
     {done, timeout, exit, run} = Map.get(state.stats, worker, {0, 0, 0, 0})
 
+    # NOTE: assumes max 9999 running jobs, see todo in bars/2
     name =
       worker
       |> Worker.name()
@@ -288,8 +295,9 @@ defmodule Ngauge.Progress do
       |> Kernel.<>(String.pad_leading("#{run}", 4))
 
     {_dq, eq} = Queue.progress(worker)
-    perc = (done + timeout + exit) / eq
-    perc = " #{(100 * perc) |> trunc()}% " |> String.pad_leading(6, " ")
+    perc = perc(done + timeout + exit, eq)
+    perc = " #{perc}% " |> String.pad_leading(6, " ")
+    # TODO: remove magic numbers ...
     width = Map.get(state, :width, @width) - len - 14
 
     # avoid the one-off trap when calculating failed percentage
