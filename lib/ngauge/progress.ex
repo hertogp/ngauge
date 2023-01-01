@@ -18,7 +18,7 @@ defmodule Ngauge.Progress do
 
   use Agent
 
-  alias Ngauge.{Job, Queue, Worker}
+  alias Ngauge.{Job, Queue, Worker, Options}
 
   # [[ ATTRIBUTES ]]
 
@@ -26,7 +26,7 @@ defmodule Ngauge.Progress do
   # @home IO.ANSI.home()
   # @home IO.ANSI.cursor(1, 1)
   @reset IO.ANSI.reset()
-  @clear IO.ANSI.clear()
+  # @clear IO.ANSI.clear()
   @clearline IO.ANSI.clear_line()
   # @bright IO.ANSI.bright()
   @normal IO.ANSI.normal()
@@ -111,23 +111,40 @@ defmodule Ngauge.Progress do
 
   # [[ HELPERS ]]
 
-  # [[ update progressbar ]]
+  defp name(worker) do
+    # simplified name for worker (i.e. the label of its module name)
+    worker
+    |> Worker.name()
+    |> String.downcase()
+  end
+
+  def runtime(seconds) do
+    # keeping it simple: <x>h <y> m <z>s
+    hrs = div(seconds, 3600)
+    min = div(seconds - hrs * 3600, 60)
+    sec = seconds - hrs * 3600 - min * 60
+
+    cond do
+      hrs > 0 -> "#{hrs}h #{min}m #{sec}s"
+      min > 0 -> "#{min}m #{sec}s"
+      true -> "#{sec}s"
+    end
+  end
 
   # final result (empty job list)
   defp update(state, [], _opts) do
     c = @clearline
 
-    # Elixir.Ngauge.Worker.Name -> name
-    name = fn worker -> Worker.name(worker) |> String.downcase() end
-
     # get results as columns where stats[k] -> {#done, #timeout, #exit, #run}
+    # note: sorted by name
     results =
       Enum.map(state.stats, fn {k, v} ->
         {done, timeout, exit, _run} = v
         total = done + timeout + exit
         perc = perc(done, total)
-        [name.(k), "#{done}", "#{timeout}", "#{exit}", "#{total}", "#{perc}%"]
+        [name(k), "#{done}", "#{timeout}", "#{exit}", "#{total}", "#{perc}%"]
       end)
+      |> Enum.sort()
 
     totals =
       Enum.reduce(state.stats, [0, 0, 0, 0], fn {_k, v}, [a, b, c, d] ->
@@ -144,7 +161,7 @@ defmodule Ngauge.Progress do
       |> List.insert_at(-1, "#{p}%")
 
     header = ["WORKER", "DONE", "TIMEOUT", "EXIT", "TOTAL", "SUCCESS"]
-    split = Enum.map(header, fn str -> String.duplicate("-", String.length(str)) end)
+    split = Enum.map(header, fn str -> String.duplicate(@box_h, String.length(str)) end)
     results = [header, split] ++ results ++ [split, totals]
 
     # get column widths required, adding 2 for spacing
@@ -159,9 +176,10 @@ defmodule Ngauge.Progress do
 
     # Write it all out, assumes cursor is just above the progressbars
     #
-    took = trunc((Job.timestamp() - state.start_time) / 1000)
+    batch = Options.get(:batch)
+    took = trunc((Job.timestamp() - state.start_time) / 1000) |> runtime()
 
-    IO.write("#{c}\n#{c}Took #{took} seconds, summary:\n#{c}\n#{c}")
+    IO.write("#{c}\n#{c}Batch #{batch} took #{took}, summary:\n#{c}\n#{c}")
 
     results
     |> Enum.map(&Enum.zip(cw, &1))
@@ -201,27 +219,30 @@ defmodule Ngauge.Progress do
       |> then(&Map.put(&1, :width, min(@width, elem(:io.columns(), 1))))
 
     # update the screen
-    state |> to_iolist() |> IO.write()
+    state
+    |> to_iolist()
+    |> IO.write()
+
     # print job results only once
-    Map.put(state, :jobs, [])
+    %{state | jobs: []}
   end
 
   @spec to_iolist(map) :: iolist()
   defp to_iolist(state) do
     # progress bar at bottom, output above
     {:ok, last_row} = :io.rows()
-    num_workers = Map.keys(state.stats) |> Enum.count()
+    num_workers = map_size(state.stats)
     start = [IO.ANSI.cursor(-3 + last_row - num_workers, 1)]
 
-    # since we prepend a list for each line of output, go in reverse order
-    # cursor ends up just above the status bars, on an empty line
+    # since each line of output is *prepended*, go in reverse order
+    # ensure the cursor ends up just above the status bars, on an *empty* line
     start
     |> bottom_line(state)
     |> bars(state)
     |> top_line(state)
     |> joblines(state)
     |> Enum.intersperse("\n")
-    |> then(fn lines -> [start | lines] end)
+    |> List.insert_at(0, start)
   end
 
   @spec perc(integer, integer) :: integer
@@ -236,10 +257,11 @@ defmodule Ngauge.Progress do
     name = " nGauge "
     kids = String.pad_leading(" #{active}", 4, [@box_h]) <> " Active "
     time = trunc((Job.timestamp() - state.start_time) / 1000)
-    runtime = " Time #{time} [s] "
+    runtime = " #{runtime(time)} "
+    # " Time #{time} [s] "
 
     {deq, enq} = Queue.progress()
-    overall = " #{deq - active}/#{enq} #{perc(deq - active, enq)}% "
+    overall = " #{deq - active}/#{enq} (#{perc(deq - active, enq)}%)"
 
     pad =
       state.width - String.length(name) - String.length(kids) - String.length(runtime) -
@@ -325,11 +347,13 @@ defmodule Ngauge.Progress do
   end
 
   defp joblines(acc, state) do
+    # prepend a single list for each job's result
     Enum.reduce(state.jobs, acc, fn job, acc ->
       [[@clearline, " ", @colors[job.status] || @normal, Job.to_str(job), @reset] | acc]
     end)
   end
 
+  # rather than a string of a repeated char, return a list of the repeated char
   defp repeat(ch, max) when max > 0,
     do: repeat(ch, max - 1, [ch])
 

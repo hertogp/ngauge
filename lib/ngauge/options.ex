@@ -16,7 +16,8 @@ defmodule Ngauge.Options do
   end
 
   @doc """
-  Gets a value from the `bucket` by `key`.
+  Gets the value for given `key`, returns nil if it doesn't exist
+
   """
   @spec get(atom) :: any
   def get(key) do
@@ -24,12 +25,14 @@ defmodule Ngauge.Options do
   end
 
   @doc """
-  Puts the `value` for the given `key` in the `bucket`.
+  Set the `value` for given `key`.
   """
   @spec set(atom, any) :: :ok
   def set(key, value) do
     Agent.update(__MODULE__, &Map.put(&1, key, value))
   end
+
+  # TODO: turn set/get state into state/0 and state/1
 
   @doc """
   Forcefully set the Option's state
