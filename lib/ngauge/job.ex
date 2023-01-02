@@ -148,7 +148,10 @@ defmodule Ngauge.Job do
   """
   @spec to_str(t()) :: binary
   def to_str(job) do
-    # result formatting differs per job status.
+    # result formatting differs per job status, one of:
+    # :done, normal result value was produced
+    # :timeout, worker was killed since it took too long
+    # :exit, it crashed and used 1) raise, 2) exit or 3) erlang error
     result = to_str(job.status, job)
     status = String.pad_trailing("#{job.status}", 7)
     "#{status} > #{job.name}(#{job.arg}) #{age(job)}ms #{result}"
@@ -161,33 +164,68 @@ defmodule Ngauge.Job do
     end
   end
 
+  defp to_str(:timeout, _),
+    do: ""
+
   defp to_str(:exit, job) do
-    # Notes:
-    # - result is always a tuple
-    # - 0th element may be an exception, or
-    # - 0th element may be an atom in which case it is followed by a list of tuples
-    case elem(job.result, 0) do
-      x when is_exception(x) ->
-        Exception.message(x)
+    # Note, exit'd job's result can be different things:
+    # - an atom/string when worker did exit(:asdf) or exit("asdf")
+    # - a tuple, whose first element is an exception if worker did raise "asdf"
+    # - a tuple, whose first element is an erlang error atom, 2nd elem is list of tuples
+    res = job.result
 
-      x when is_atom(x) ->
-        # only get the first bits of the error information
-        result =
-          job.result
-          |> elem(1)
-          |> List.first()
-          |> Tuple.to_list()
-          |> List.flatten()
+    cond do
+      is_atom(res) ->
+        # worker did exit(:reason)
+        "case 1 " <> to_string(res)
 
-        "#{x} - #{inspect(result)}"
+      is_binary(res) ->
+        # worker did exit("reason")
+        "case 2 " <> res
 
-      _ ->
-        "#{inspect(job.result)}"
+      is_exception(res) ->
+        # not sure if this happens
+        "case 3 " <> Exception.message(res)
+
+      is_tuple(res) ->
+        # worker did either raise or an erlang error happened
+        case elem(res, 0) do
+          x when is_exception(x) ->
+            "case 4.1 " <> Exception.message(x)
+
+          x when is_atom(x) ->
+            # only get the first bits of the error information
+            result =
+              job.result
+              |> elem(1)
+              |> List.first()
+              |> Tuple.to_list()
+              |> List.flatten()
+
+            "case 4.2 #{x} - #{inspect(result)}"
+
+          x when is_tuple(x) ->
+            # only get the first bits of the error information
+            result =
+              res
+              |> elem(1)
+              |> List.first()
+              |> Tuple.to_list()
+              |> List.flatten()
+
+            "case 4.3 #{inspect(x)} -> #{inspect(result)}"
+
+          _ ->
+            "case 5 #{inspect(job.result)}"
+        end
+
+      true ->
+        "#{inspect(res)}"
     end
   end
 
   defp to_str(_, _),
-    do: ""
+    do: "unhandled type of job result"
 
   @doc """
   Returns a list of csv-lines representing given `job`'s results.

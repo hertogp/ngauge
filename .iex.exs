@@ -1,5 +1,5 @@
 # usage: Ngauge.CLI.main(cli_args<x>)
-cli_args1 = ["1.1.1.0/29", "-w", "chain"]
+cli_args1 = ["1.1.1.0/28", "-w", "chain"]
 
 cli_args2 = [
   "1.1.1.0/25",

@@ -21,6 +21,7 @@ defmodule Ngauge.CLI do
   ]
 
   def main(argv) do
+    # just to be sure IO.ANSI can be used
     Application.put_env(:elixir, :ansi_enabled, true)
 
     # silence SUPERVISOR / CRASH reports for workers that crash or are killed

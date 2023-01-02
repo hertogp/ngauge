@@ -18,6 +18,11 @@ defmodule Ngauge.Worker.Chain do
       "1.1.1.2" -> Queue.enq(__MODULE__, ["badaboom!", "2.2.2.0/31"])
       "1.1.1.3" -> matherr(0)
       "1.1.1.4" -> Queue.enq(Ngauge.Worker.Ping, [arg])
+      "1.1.1.5" -> exit(:oops)
+      "1.1.1.6" -> exit("oops string")
+      "1.1.1.7" -> raise ArgumentError, "arg error"
+      "1.1.1.8" -> raise RuntimeError, "runtime error"
+      "1.1.1.9" -> throw(:thrown)
       _ -> nil
     end
 
