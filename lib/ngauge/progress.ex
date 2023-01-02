@@ -5,7 +5,7 @@ defmodule Ngauge.Progress do
   """
 
   # [[ TODO: ]]
-  # [ ] refactor state so repeat calculations are not necesary
+  # [ ] refactor state so repeat calculations are not necessary
   # [ ] make sure to not overwrite any previous text on the screen
   # [c] turn this into a GenServer
   # [c] in summary, list each worker's tests/second
@@ -34,7 +34,7 @@ defmodule Ngauge.Progress do
   @yellow IO.ANSI.color(3, 3, 0)
   @white IO.ANSI.white()
   @colors %{
-    :done => IO.ANSI.green(),
+    :done => IO.ANSI.normal(),
     :exit => IO.ANSI.red(),
     :timeout => IO.ANSI.bright() <> IO.ANSI.yellow(),
     :run => IO.ANSI.normal()
@@ -100,8 +100,7 @@ defmodule Ngauge.Progress do
   The list should be comprised of the currently running jobs and those that were
   completed during the last yield.
 
-  An empty list signals that all work is finished and the worker statistics are
-  printed instead.
+  An empty job list means there is no more work to be done.
 
   """
   @spec update([Job.t()], Keyword.t()) :: :ok
