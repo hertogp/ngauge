@@ -74,7 +74,7 @@ defmodule Ngauge.Progress do
 
   def child_spec(arg) do
     IO.inspect(arg, label: :progress_childspec)
-    # callled by the supervisor
+    # called by the supervisor
     %{
       id: __MODULE__,
       start: {__MODULE__, :start_link, [__MODULE__]},
@@ -114,9 +114,9 @@ defmodule Ngauge.Progress do
   """
   @spec update([Job.t()], Keyword.t()) :: :ok
   def update(jobs, opts \\ []) do
-    # TODO:
-    # - do GenServer.cast when we have jobs, and
-    # - do GenServer.call when we are done?
+    # TODO: mayby do
+    # - GenServer.cast when we have jobs, and
+    # - GenServer.call when we are done?
     # otherwise screen output is borked
     GenServer.call(__MODULE__, {:update, jobs, opts})
   end
