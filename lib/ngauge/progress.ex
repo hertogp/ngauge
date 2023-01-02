@@ -16,7 +16,7 @@ defmodule Ngauge.Progress do
   # [x] list each worker's ok: x, crash: y, timeout: z
   # [x] summary: add a totals line
 
-  use Agent
+  use GenServer
 
   alias Ngauge.{Job, Queue, Worker, Options}
 
@@ -72,27 +72,36 @@ defmodule Ngauge.Progress do
 
   # [[ STARTUP API ]]
 
+  def child_spec(arg) do
+    IO.inspect(arg, label: :progress_childspec)
+    # callled by the supervisor
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [__MODULE__]},
+      restart: :permanent,
+      shutdown: 20_000
+    }
+  end
+
   @spec start_link(any) :: {:error, any} | {:ok, pid}
   def start_link(_state) do
     state = Map.put(@state, :start_time, Job.timestamp())
+    GenServer.start_link(__MODULE__, state, name: __MODULE__)
+  end
 
-    Agent.start_link(fn -> state end, name: __MODULE__)
+  @impl true
+  @spec init(any) :: {:ok, map}
+  def init(arg) do
+    IO.inspect(arg, label: :progress_init)
+    {:ok, Map.put(@state, :start_time, Job.timestamp())}
   end
 
   # [[ CLIENT API ]]
 
-  # def clear() do
-  #   state = Map.put(@state, :start_time, Job.timestamp())
-  #   Agent.update(__MODULE__, fn _ -> state end)
-  # end
-  #
-  # @spec clear_screen() :: :ok
-  # def clear_screen() do
-  #   IO.write(@clear)
-  # end
-
-  def state(),
-    do: Agent.get(__MODULE__, & &1)
+  def state() do
+    # TODO: remove me when peeking is no longer needed
+    GenServer.call(__MODULE__, {:state})
+  end
 
   @doc """
   Given a list of jobs that are running or are done, update the worker statistics.
@@ -105,7 +114,23 @@ defmodule Ngauge.Progress do
   """
   @spec update([Job.t()], Keyword.t()) :: :ok
   def update(jobs, opts \\ []) do
-    Agent.update(__MODULE__, fn state -> update(state, jobs, opts) end)
+    # TODO:
+    # - do GenServer.cast when we have jobs, and
+    # - do GenServer.call when we are done?
+    # otherwise screen output is borked
+    GenServer.call(__MODULE__, {:update, jobs, opts})
+  end
+
+  # {{ GENSERVER CALLBACKS ]]
+
+  @impl true
+  def handle_call({:state}, _from, state),
+    do: {:reply, state, state}
+
+  @impl true
+  def handle_call({:update, jobs, opts}, _from, state) do
+    state = update(state, jobs, opts)
+    {:reply, :ok, state}
   end
 
   # [[ HELPERS ]]
@@ -186,8 +211,10 @@ defmodule Ngauge.Progress do
     |> Enum.intersperse("\n" <> @clearline)
     |> IO.write()
 
-    IO.write("\n\n")
+    # clear some space in case we are run on repeat ...
+    IO.write(String.duplicate("\n", 2 + map_size(state.stats)))
 
+    # return out new state to handle_cast.
     state
   end
 
@@ -195,9 +222,13 @@ defmodule Ngauge.Progress do
   defp update(state, jobs, opts) do
     # if requested, start afresh
     state =
-      if Keyword.get(opts, :clear, false),
-        do: Map.put(@state, :start_time, Job.timestamp()),
-        else: state
+      if Keyword.get(opts, :clear, false) do
+        # clear some space.
+        IO.write("\n\n\n")
+        Map.put(@state, :start_time, Job.timestamp())
+      else
+        state
+      end
 
     # running count is not cumulative, so reset those
     # stats[worker] -> {done, timeout, exit (crash), running}
