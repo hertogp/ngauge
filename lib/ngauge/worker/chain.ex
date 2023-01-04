@@ -14,8 +14,8 @@ defmodule Ngauge.Worker.Chain do
     # do not forget to have the catch all clause at the end
     case arg do
       "1.1.1.0" -> raise "boom"
-      "1.1.1.1" -> Process.sleep(10_000)
-      "1.1.1.2" -> Queue.enq(__MODULE__, ["badaboom!", "2.2.2.0/31"])
+      "1.1.1.1" -> raise ArgumentError
+      "1.1.1.2" -> raise {:bada, :boom}
       "1.1.1.3" -> matherr(0)
       "1.1.1.4" -> Queue.enq(Ngauge.Worker.Ping, [arg])
       "1.1.1.5" -> exit(:oops)

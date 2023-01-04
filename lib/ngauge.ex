@@ -15,14 +15,17 @@ defmodule Ngauge do
 
   # TODO:
 
-  [ ] add Logger with a file backend for csv
+  [ ] add dynamic worker-type-kv stores (one for each worker type), so throws are not needed?
+  [ ] add Logger with a file backend for csv?
   [ ] add Terminator that will clear the Queue's and drain the active workers & csv writers
-  [ ] turn Queue into a GenServer (like Csv)
-  [ ] allow max workers per type, e.g. by workername:20 vs -m 10
   [ ] allow max workers per type, e.g. by -w worker1:20,worker2:10,worker3:5
+  [ ] allow max workers per type, e.g. by workername:20 vs -m 10
   [x] enqueueing starts a new queue if it is not already running
   [x] progress does not keep N jobs but their string representation instead
   [x] progress just dumps an iolist to the screen
+  [x] turn Options into a GenServer
+  [x] turn Progress into a GenServer
+  [x] turn Queue into a GenServer (like Csv)
   [x] workers are able to enqueue more tests for other workers
   [x] workers are able to enqueue more tests for themselves
   [x] workers are dynamically loaded when tests are enqueued for them
@@ -39,7 +42,13 @@ defmodule Ngauge do
       [x] `to_csv/1` format a job's result as lines of csv field values
       [x] `csv_headers/0` in case a new file is started
 
+  # Ideas/Questions
+  - howto specify jobs in yaml or toml
+  - some jobs may need more than 1 argument (e.g. cert checks based on IP + SNI ?)
+  - specific workers for reconnaissance that create target files?
+
   # Real workers
+
   [ ] chain pulls the cert chain off of a host or IP address
   [ ] chain submits additional hostnames based on SAN names for itself
   [ ] chain submits additional A/AAAA checks based on SAN names

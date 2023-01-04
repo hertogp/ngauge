@@ -152,6 +152,9 @@ defmodule Ngauge.Job do
     # :done, normal result value was produced
     # :timeout, worker was killed since it took too long
     # :exit, it crashed and used 1) raise, 2) exit or 3) erlang error
+    # TODO: wrap this in a try/do/catch/2 since we cannot trust workers
+    # to not return something as a :done result and then choke on it
+    # in a to_str function.
     result = to_str(job.status, job)
     status = String.pad_trailing("#{job.status}", 7)
     "#{status} > #{job.name}(#{job.arg}) #{age(job)}ms #{result}"
