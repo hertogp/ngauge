@@ -30,3 +30,6 @@ ngauge-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Scratch files
+/scr/
